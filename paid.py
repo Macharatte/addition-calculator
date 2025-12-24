@@ -29,10 +29,20 @@ st.markdown("""
     .premium-btn div.stButton > button p { color: #000000 !important; }
     .del-btn div.stButton > button { background-color: #FF4B4B !important; }
     .eq-btn div.stButton > button { background-color: #2e7d32 !important; }
+    
+    /* 結果表示エリアのスタイル */
+    .result-box {
+        background-color: rgba(255, 215, 0, 0.1);
+        padding: 15px;
+        border-radius: 8px;
+        border: 2px solid #FFD700;
+        margin-top: 10px;
+        text-align: center;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 巨数単位の設定（大きい順に処理することで誤変換を防ぐ） ---
+# --- 単位・ロジック ---
 SI_PREFIXES = [
     ('Q', 1e30), ('R', 1e27), ('Y', 1e24), ('Z', 1e21), ('E', 1e18), ('P', 1e15), ('T', 1e12), 
     ('G', 1e9), ('M', 1e6), ('k', 1e3), ('h', 1e2), ('da', 1e1), ('d', 1e-1), ('c', 1e-2), 
@@ -49,27 +59,19 @@ def get_all_rates():
         return {"JPY": 150.0, "USD": 1.0, "EUR": 0.9, "GBP": 0.8}
 
 def parse_formula(formula):
-    """数式を安全に数値へ変換する"""
     if not formula or formula == "Error": return 0.0
-    
-    # 記号の正規化
     f = formula.replace('×', '*').replace('÷', '/').replace('−', '-').replace('m', '-')
-    
-    # 巨数単位の変換（数字+単位 を 数字*(倍率) に変換）
     for unit, val in SI_PREFIXES:
         if unit in f:
             f = re.sub(f'(\\d+){unit}', f'(\\1*{val})', f)
             f = f.replace(unit, str(val))
-    
     try:
-        # evalの安全な実行
         result = eval(f, {"__builtins__": None}, {"math": math, "statistics": statistics, "abs": abs})
         return float(result)
     except:
         return 0.0
 
 def calculate_complex_tax(val, tax_type):
-    """所得税・贈与税の速算表ロジック"""
     if tax_type == "tax_income":
         if val <= 1950000: return val * 0.05
         elif val <= 3300000: return val * 0.10 - 97500
@@ -98,6 +100,7 @@ if 'formula' not in ss: ss.formula = ""
 if 'mode' not in ss: ss.mode = "通常"
 if 'last_was_equal' not in ss: ss.last_was_equal = False
 if 'premium_sub' not in ss: ss.premium_sub = "なし"
+if 'conv_result' not in ss: ss.conv_result = ""
 
 st.markdown('<div style="text-align:center; font-weight:900; font-size:24px; color:var(--text-display);">PYTHON CALCULATOR 2 PREMIUM</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="display-container"><span>{ss.formula if ss.formula else "0"}</span></div>', unsafe_allow_html=True)
@@ -112,6 +115,7 @@ def on_click(char):
         except: ss.formula = "Error"
     elif char == "delete":
         ss.formula = ""
+        ss.conv_result = ""
     else:
         if ss.last_was_equal: ss.formula = ""; ss.last_was_equal = False
         ss.formula += str(char)
@@ -173,12 +177,23 @@ if ss.mode == "有料機能":
         c1, _, c2 = st.columns([4, 1, 4])
         from_c = c1.selectbox("元", cur_list, index=cur_list.index("USD"))
         to_c = c2.selectbox("先", cur_list, index=cur_list.index("JPY"))
+        
         input_v = st.text_input("数値", value=ss.formula if ss.formula != "Error" else "0")
+        
         st.markdown('<div class="premium-btn">', unsafe_allow_html=True)
         if st.button(f"変換実行"):
             val = parse_formula(input_v)
-            ss.formula = format((val / rates[from_c]) * rates[to_c], '.10g')
-            ss.last_was_equal = True; st.rerun()
+            res = (val / rates[from_c]) * rates[to_c]
+            ss.conv_result = f"{format(res, ',.4f')} {to_c}"
+            st.rerun()
+        
+        if ss.conv_result:
+            st.markdown(f"""
+            <div class="result-box">
+                <p style="margin:0; font-size:14px; color:gray;">変換結果</p>
+                <p style="margin:0; font-size:24px; font-weight:900; color:#B8860B;">{ss.conv_result}</p>
+            </div>
+            """, unsafe_allow_html=True)
 
 elif ss.mode != "通常":
     extra = []

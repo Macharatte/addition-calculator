@@ -29,9 +29,6 @@ st.markdown("""
     .premium-btn div.stButton > button p { color: #000000 !important; }
     .del-btn div.stButton > button { background-color: #FF4B4B !important; }
     .eq-btn div.stButton > button { background-color: #2e7d32 !important; }
-    
-    /* セレクトボックスのラベル色調整 */
-    .stSelectbox label { color: var(--text-display) !important; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -45,7 +42,7 @@ def get_all_rates():
         return {"JPY": 150.0, "USD": 1.0, "EUR": 0.9, "GBP": 0.8}
 
 def calculate_complex_tax(val, tax_type):
-    if tax_type == "tax_income":  # 所得税（速算表・控除自動適用）
+    if tax_type == "tax_income":
         if val <= 1950000: return val * 0.05
         elif val <= 3300000: return val * 0.10 - 97500
         elif val <= 6950000: return val * 0.20 - 427500
@@ -53,7 +50,7 @@ def calculate_complex_tax(val, tax_type):
         elif val <= 18000000: return val * 0.33 - 1536000
         elif val <= 40000000: return val * 0.40 - 2796000
         else: return val * 0.45 - 4796000
-    elif tax_type == "tax_gift":  # 贈与税（基礎控除110万自動適用）
+    elif tax_type == "tax_gift":
         v = val - 1100000
         if v <= 0: return 0
         if v <= 2000000: return v * 0.10
@@ -62,20 +59,20 @@ def calculate_complex_tax(val, tax_type):
         elif v <= 6000000: return v * 0.30 - 650000
         elif v <= 10000000: return v * 0.40 - 1250000
         else: return v * 0.55 - 4000000
-    elif tax_type == "tax_corp": return val * 0.232 # 法人税（標準税率）
-    elif tax_type == "tax_res": return val * 0.10  # 住民税
-    elif tax_type == "tax_fix": return val * 0.014 # 固定資産税
+    elif tax_type == "tax_corp": return val * 0.232
+    elif tax_type == "tax_res": return val * 0.10
+    elif tax_type == "tax_fix": return val * 0.014
     return val
 
 # --- 状態管理 ---
 ss = st.session_state
-for key, val in [('formula', ""), ('mode', "通常"), ('last_was_equal', False)]:
+for key, val in [('formula', ""), ('mode', "通常"), ('last_was_equal', False), ('premium_sub', "なし")]:
     if key not in ss: ss[key] = val
 
 st.markdown('<div style="text-align:center; font-weight:900; font-size:24px; color:var(--text-display);">PYTHON CALCULATOR 2 (PREMIUM)</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="display-container"><span>{ss.formula if ss.formula else "0"}</span></div>', unsafe_allow_html=True)
 
-# --- 基本クリックロジック ---
+# --- 基本ロジック ---
 def on_click(char):
     try:
         if char == "＝":
@@ -88,7 +85,7 @@ def on_click(char):
             ss.formula += str(char)
     except: ss.formula = "Error"
 
-# --- メインキーパッド ---
+# --- キーパッド ---
 main_btns = ["7","8","9","π","√","+","4","5","6","e","^^","−","1","2","3","i","(-)","×","0","00",".","(",")","÷"]
 cols = st.columns(6)
 for i, b in enumerate(main_btns):
@@ -110,22 +107,28 @@ st.markdown('<hr style="margin:10px 0; opacity:0.3;">', unsafe_allow_html=True)
 modes = ["通常", "科学計算", "巨数", "値数", "👑 有料機能"]
 m_cols = st.columns(5)
 for i, m in enumerate(modes):
-    if m_cols[i].button(m, key=f"m{i}"): ss.mode = m; st.rerun()
+    if m_cols[i].button(m, key=f"m{i}"): ss.mode = m; ss.premium_sub = "なし"; st.rerun()
 
-# --- 有料機能エリア ---
+# --- 👑 有料機能：サブメニューボタン ---
 if ss.mode == "👑 有料機能":
-    st.markdown('<div style="color:var(--text-display); font-weight:bold; margin-bottom:10px;">PREMIUM FUNCTIONS</div>', unsafe_allow_html=True)
-    
-    tab1, tab2 = st.tabs(["📊 税金計算", "💱 通貨変換"])
-    
-    with tab1:
+    st.write("")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown('<div class="premium-btn">', unsafe_allow_html=True)
+        if st.button("📊 税金計算モード"): ss.premium_sub = "税金"; st.rerun()
+    with c2:
+        st.markdown('<div class="premium-btn">', unsafe_allow_html=True)
+        if st.button("💱 通貨変換モード"): ss.premium_sub = "通貨"; st.rerun()
+
+    # --- 税金計算エリア ---
+    if ss.premium_sub == "税金":
+        st.markdown("---")
         taxes = [("税込(10%)", "tax_10"), ("税込(8%)", "tax_8"), ("所得税", "tax_income"), 
                  ("法人税", "tax_corp"), ("住民税", "tax_res"), ("固定資産税", "tax_fix"), ("贈与税", "tax_gift")]
         t_cols = st.columns(4)
         for i, (label, code) in enumerate(taxes):
             with t_cols[i % 4]:
-                st.markdown('<div class="premium-btn">', unsafe_allow_html=True)
-                if st.button(label, key=f"tax{i}"):
+                if st.button(label, key=f"tbtn{i}"):
                     try:
                         val = float(eval(ss.formula.replace('×', '*').replace('÷', '/').replace('−', '-')))
                         if "10" in code: ss.formula = format(val * 1.10, '.10g')
@@ -134,30 +137,31 @@ if ss.mode == "👑 有料機能":
                         ss.last_was_equal = True; st.rerun()
                     except: ss.formula = "Error"; st.rerun()
 
-    with tab2:
+    # --- 通貨変換エリア ---
+    if ss.premium_sub == "通貨":
+        st.markdown("---")
         rates = get_all_rates()
         cur_list = sorted(list(rates.keys()))
         
-        # UI: 通貨を選択 → 矢印 → 通貨を選択
         c_col1, c_col_arrow, c_col2 = st.columns([4, 1, 4])
-        with c_col1:
-            from_cur = st.selectbox("元の通貨", cur_list, index=cur_list.index("USD"), key="from_cur")
-        with c_col_arrow:
-            st.markdown('<div style="text-align:center; font-size:30px; margin-top:25px; color:var(--text-display);">→</div>', unsafe_allow_html=True)
-        with c_col2:
-            to_cur = st.selectbox("変換する通貨", cur_list, index=cur_list.index("JPY"), key="to_cur")
+        with c_col1: from_cur = st.selectbox("元の通貨", cur_list, index=cur_list.index("USD"))
+        with c_col_arrow: st.markdown('<div style="text-align:center; font-size:30px; margin-top:25px; color:var(--text-display);">→</div>', unsafe_allow_html=True)
+        with c_col2: to_cur = st.selectbox("変換する通貨", cur_list, index=cur_list.index("JPY"))
+        
+        # 数値入力欄（現在のディスプレイの値をデフォルトに設定）
+        input_val = st.text_input("変換する数値", value=ss.formula if ss.formula and ss.formula != "Error" else "0")
         
         st.markdown('<div class="premium-btn">', unsafe_allow_html=True)
-        if st.button(f"実行: {from_cur} から {to_cur} へ変換", use_container_width=True):
+        if st.button(f"実行: {from_cur} から {to_cur} へ変換"):
             try:
-                val = float(eval(ss.formula.replace('×', '*').replace('÷', '/').replace('−', '-')))
+                val = float(input_val)
                 converted = (val / rates[from_cur]) * rates[to_cur]
                 ss.formula = format(converted, '.10g')
                 ss.last_was_equal = True; st.rerun()
             except: ss.formula = "Error"; st.rerun()
 
 elif ss.mode != "通常":
-    # 既存のサブモード表示ロジック（科学計算など）
+    # 他のモード（科学計算など）の表示
     extra = []
     if ss.mode == "巨数": extra = ["Q", "R", "Y", "Z", "E", "P", "T", "G", "M", "k", "h", "da", "d", "c", "m", "μ", "n", "p", "f", "a", "z", "y", "r", "q"]
     elif ss.mode == "科学計算": extra = ["sin(", "cos(", "tan(", "°", "abs(", "log("]

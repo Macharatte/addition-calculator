@@ -69,7 +69,7 @@ ss = st.session_state
 for key, val in [('formula', ""), ('mode', "通常"), ('last_was_equal', False), ('premium_sub', "なし")]:
     if key not in ss: ss[key] = val
 
-st.markdown('<div style="text-align:center; font-weight:900; font-size:24px; color:var(--text-display);">PYTHON CALCULATOR 2 (PREMIUM)</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center; font-weight:900; font-size:24px; color:var(--text-display);">PYTHON CALCULATOR 2 PREMIUM</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="display-container"><span>{ss.formula if ss.formula else "0"}</span></div>', unsafe_allow_html=True)
 
 # --- 基本ロジック ---
@@ -104,25 +104,26 @@ with bot_c2:
 st.markdown('<hr style="margin:10px 0; opacity:0.3;">', unsafe_allow_html=True)
 
 # --- モード切替 ---
-modes = ["通常", "科学計算", "巨数", "値数", "👑 有料機能"]
+modes = ["通常", "科学計算", "巨数", "値数", "有料機能"]
 m_cols = st.columns(5)
 for i, m in enumerate(modes):
     if m_cols[i].button(m, key=f"m{i}"): ss.mode = m; ss.premium_sub = "なし"; st.rerun()
 
-# --- 👑 有料機能：サブメニューボタン ---
-if ss.mode == "👑 有料機能":
+# --- 有料機能：サブメニュー ---
+if ss.mode == "有料機能":
     st.write("")
     c1, c2 = st.columns(2)
     with c1:
         st.markdown('<div class="premium-btn">', unsafe_allow_html=True)
-        if st.button("📊 税金計算モード"): ss.premium_sub = "税金"; st.rerun()
+        if st.button("税金計算モード"): ss.premium_sub = "税金"; st.rerun()
     with c2:
         st.markdown('<div class="premium-btn">', unsafe_allow_html=True)
-        if st.button("💱 通貨変換モード"): ss.premium_sub = "通貨"; st.rerun()
+        if st.button("通貨変換モード"): ss.premium_sub = "通貨"; st.rerun()
 
     # --- 税金計算エリア ---
     if ss.premium_sub == "税金":
         st.markdown("---")
+        st.caption("数値を入力してから、計算したい項目を選択してください")
         taxes = [("税込(10%)", "tax_10"), ("税込(8%)", "tax_8"), ("所得税", "tax_income"), 
                  ("法人税", "tax_corp"), ("住民税", "tax_res"), ("固定資産税", "tax_fix"), ("贈与税", "tax_gift")]
         t_cols = st.columns(4)
@@ -148,7 +149,6 @@ if ss.mode == "👑 有料機能":
         with c_col_arrow: st.markdown('<div style="text-align:center; font-size:30px; margin-top:25px; color:var(--text-display);">→</div>', unsafe_allow_html=True)
         with c_col2: to_cur = st.selectbox("変換する通貨", cur_list, index=cur_list.index("JPY"))
         
-        # 数値入力欄（現在のディスプレイの値をデフォルトに設定）
         input_val = st.text_input("変換する数値", value=ss.formula if ss.formula and ss.formula != "Error" else "0")
         
         st.markdown('<div class="premium-btn">', unsafe_allow_html=True)
@@ -161,7 +161,6 @@ if ss.mode == "👑 有料機能":
             except: ss.formula = "Error"; st.rerun()
 
 elif ss.mode != "通常":
-    # 他のモード（科学計算など）の表示
     extra = []
     if ss.mode == "巨数": extra = ["Q", "R", "Y", "Z", "E", "P", "T", "G", "M", "k", "h", "da", "d", "c", "m", "μ", "n", "p", "f", "a", "z", "y", "r", "q"]
     elif ss.mode == "科学計算": extra = ["sin(", "cos(", "tan(", "°", "abs(", "log("]

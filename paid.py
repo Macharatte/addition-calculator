@@ -3,6 +3,7 @@ import math
 import statistics
 import datetime
 import requests
+import re
 
 # --- ページ設定 ---
 st.set_page_config(page_title="Python Calculator Pro 2", layout="centered")
@@ -32,7 +33,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 定数・ロジック ---
+# --- 単位・ロジック ---
 SI_PREFIXES = {
     'Q': 1e30, 'R': 1e27, 'Y': 1e24, 'Z': 1e21, 'E': 1e18, 'P': 1e15, 'T': 1e12, 'G': 1e9, 'M': 1e6, 'k': 1e3, 'h': 1e2, 'da': 1e1,
     'd': 1e-1, 'c': 1e-2, 'm': 1e-3, 'μ': 1e-6, 'n': 1e-9, 'p': 1e-12, 'f': 1e-15, 'a': 1e-18, 'z': 1e-21, 'y': 1e-24, 'r': 1e-27, 'q': 1e-30
@@ -47,11 +48,14 @@ def get_all_rates():
         return {"JPY": 150.0, "USD": 1.0, "EUR": 0.9, "GBP": 0.8}
 
 def parse_formula(formula):
-    """巨数単位を含む数式を数値に変換して計算する"""
+    if not formula or formula == "Error": return 0
     f = formula.replace('×', '*').replace('÷', '/').replace('−', '-').replace('m', '-')
+    # 巨数を数値に置換
     for unit, val in SI_PREFIXES.items():
         if unit in f:
-            f = f.replace(unit, f"*({val})")
+            # 数字の直後に単位がある場合に対応（例: 5k -> 5*1000）
+            f = re.sub(f'(\\d){unit}', f'\\1*({val})', f)
+            f = f.replace(unit, str(val))
     return eval(f, {"math": math, "statistics": statistics, "abs": abs})
 
 def calculate_complex_tax(val, tax_type):
@@ -121,7 +125,7 @@ m_cols = st.columns(5)
 for i, m in enumerate(modes):
     if m_cols[i].button(m, key=f"m{i}"): ss.mode = m; ss.premium_sub = "なし"; st.rerun()
 
-# --- 各モードの追加ボタン ---
+# --- 有料機能エリア ---
 if ss.mode == "有料機能":
     c1, c2 = st.columns(2)
     with c1:
@@ -140,7 +144,6 @@ if ss.mode == "有料機能":
             with t_cols[i % 4]:
                 if st.button(label, key=f"tbtn{i}"):
                     try:
-                        # 現在のディスプレイの値を数値化してから税金計算
                         base_val = parse_formula(ss.formula)
                         if "10" in code: res = base_val * 1.10
                         elif "8" in code: res = base_val * 1.08
@@ -156,7 +159,9 @@ if ss.mode == "有料機能":
         c1, _, c2 = st.columns([4, 1, 4])
         from_c = c1.selectbox("元", cur_list, index=cur_list.index("USD"))
         to_c = c2.selectbox("先", cur_list, index=cur_list.index("JPY"))
-        input_v = st.text_input("数値", value=ss.formula if ss.formula != "Error" else "0")
+        # 入力欄の値をディスプレイの現在の数式に同期
+        current_display = ss.formula if ss.formula and ss.formula != "Error" else "0"
+        input_v = st.text_input("数値", value=current_display)
         st.markdown('<div class="premium-btn">', unsafe_allow_html=True)
         if st.button(f"変換実行"):
             try:
@@ -166,6 +171,7 @@ if ss.mode == "有料機能":
             except: ss.formula = "Error"; st.rerun()
 
 elif ss.mode != "通常":
+    # 巨数モードや科学計算モードのボタン
     extra = []
     if ss.mode == "巨数": extra = list(SI_PREFIXES.keys())
     elif ss.mode == "科学計算": extra = ["sin(", "cos(", "tan(", "°", "abs(", "log("]

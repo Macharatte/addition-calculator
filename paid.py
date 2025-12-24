@@ -1,7 +1,6 @@
 import streamlit as st
 import math
 import statistics
-import datetime
 import requests
 import re
 
@@ -33,11 +32,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 単位・ロジック ---
-SI_PREFIXES = {
-    'Q': 1e30, 'R': 1e27, 'Y': 1e24, 'Z': 1e21, 'E': 1e18, 'P': 1e15, 'T': 1e12, 'G': 1e9, 'M': 1e6, 'k': 1e3, 'h': 1e2, 'da': 1e1,
-    'd': 1e-1, 'c': 1e-2, 'm': 1e-3, 'μ': 1e-6, 'n': 1e-9, 'p': 1e-12, 'f': 1e-15, 'a': 1e-18, 'z': 1e-21, 'y': 1e-24, 'r': 1e-27, 'q': 1e-30
-}
+# --- 巨数単位の設定（大きい順に処理することで誤変換を防ぐ） ---
+SI_PREFIXES = [
+    ('Q', 1e30), ('R', 1e27), ('Y', 1e24), ('Z', 1e21), ('E', 1e18), ('P', 1e15), ('T', 1e12), 
+    ('G', 1e9), ('M', 1e6), ('k', 1e3), ('h', 1e2), ('da', 1e1), ('d', 1e-1), ('c', 1e-2), 
+    ('μ', 1e-6), ('n', 1e-9), ('p', 1e-12), ('f', 1e-15), ('a', 1e-18), ('z', 1e-21), ('y', 1e-24), 
+    ('r', 1e-27), ('q', 1e-30)
+]
 
 @st.cache_data(ttl=3600)
 def get_all_rates():
@@ -48,17 +49,27 @@ def get_all_rates():
         return {"JPY": 150.0, "USD": 1.0, "EUR": 0.9, "GBP": 0.8}
 
 def parse_formula(formula):
-    if not formula or formula == "Error": return 0
+    """数式を安全に数値へ変換する"""
+    if not formula or formula == "Error": return 0.0
+    
+    # 記号の正規化
     f = formula.replace('×', '*').replace('÷', '/').replace('−', '-').replace('m', '-')
-    # 巨数を数値に置換
-    for unit, val in SI_PREFIXES.items():
+    
+    # 巨数単位の変換（数字+単位 を 数字*(倍率) に変換）
+    for unit, val in SI_PREFIXES:
         if unit in f:
-            # 数字の直後に単位がある場合に対応（例: 5k -> 5*1000）
-            f = re.sub(f'(\\d){unit}', f'\\1*({val})', f)
+            f = re.sub(f'(\\d+){unit}', f'(\\1*{val})', f)
             f = f.replace(unit, str(val))
-    return eval(f, {"math": math, "statistics": statistics, "abs": abs})
+    
+    try:
+        # evalの安全な実行
+        result = eval(f, {"__builtins__": None}, {"math": math, "statistics": statistics, "abs": abs})
+        return float(result)
+    except:
+        return 0.0
 
 def calculate_complex_tax(val, tax_type):
+    """所得税・贈与税の速算表ロジック"""
     if tax_type == "tax_income":
         if val <= 1950000: return val * 0.05
         elif val <= 3300000: return val * 0.10 - 97500
@@ -83,25 +94,29 @@ def calculate_complex_tax(val, tax_type):
 
 # --- 状態管理 ---
 ss = st.session_state
-for key, val in [('formula', ""), ('mode', "通常"), ('last_was_equal', False), ('premium_sub', "なし")]:
-    if key not in ss: ss[key] = val
+if 'formula' not in ss: ss.formula = ""
+if 'mode' not in ss: ss.mode = "通常"
+if 'last_was_equal' not in ss: ss.last_was_equal = False
+if 'premium_sub' not in ss: ss.premium_sub = "なし"
 
 st.markdown('<div style="text-align:center; font-weight:900; font-size:24px; color:var(--text-display);">PYTHON CALCULATOR 2 PREMIUM</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="display-container"><span>{ss.formula if ss.formula else "0"}</span></div>', unsafe_allow_html=True)
 
 # --- 基本ロジック ---
 def on_click(char):
-    try:
-        if char == "＝":
-            ss.formula = format(parse_formula(ss.formula), '.10g')
+    if char == "＝":
+        try:
+            val = parse_formula(ss.formula)
+            ss.formula = format(val, '.10g')
             ss.last_was_equal = True
-        elif char == "delete": ss.formula = ""
-        else:
-            if ss.last_was_equal: ss.formula = ""; ss.last_was_equal = False
-            ss.formula += str(char)
-    except: ss.formula = "Error"
+        except: ss.formula = "Error"
+    elif char == "delete":
+        ss.formula = ""
+    else:
+        if ss.last_was_equal: ss.formula = ""; ss.last_was_equal = False
+        ss.formula += str(char)
 
-# --- キーパッド ---
+# --- ボタン配置 ---
 main_btns = ["7","8","9","π","√","+","4","5","6","e","^^","−","1","2","3","i","(-)","×","0","00",".","(",")","÷"]
 cols = st.columns(6)
 for i, b in enumerate(main_btns):
@@ -123,7 +138,8 @@ st.markdown('<hr style="margin:10px 0; opacity:0.3;">', unsafe_allow_html=True)
 modes = ["通常", "科学計算", "巨数", "値数", "有料機能"]
 m_cols = st.columns(5)
 for i, m in enumerate(modes):
-    if m_cols[i].button(m, key=f"m{i}"): ss.mode = m; ss.premium_sub = "なし"; st.rerun()
+    if m_cols[i].button(m, key=f"m{i}"):
+        ss.mode = m; ss.premium_sub = "なし"; st.rerun()
 
 # --- 有料機能エリア ---
 if ss.mode == "有料機能":
@@ -143,14 +159,12 @@ if ss.mode == "有料機能":
         for i, (label, code) in enumerate(taxes):
             with t_cols[i % 4]:
                 if st.button(label, key=f"tbtn{i}"):
-                    try:
-                        base_val = parse_formula(ss.formula)
-                        if "10" in code: res = base_val * 1.10
-                        elif "8" in code: res = base_val * 1.08
-                        else: res = calculate_complex_tax(base_val, code)
-                        ss.formula = format(res, '.10g')
-                        ss.last_was_equal = True; st.rerun()
-                    except: ss.formula = "Error"; st.rerun()
+                    val = parse_formula(ss.formula)
+                    if "10" in code: res = val * 1.10
+                    elif "8" in code: res = val * 1.08
+                    else: res = calculate_complex_tax(val, code)
+                    ss.formula = format(res, '.10g')
+                    ss.last_was_equal = True; st.rerun()
 
     if ss.premium_sub == "通貨":
         st.markdown("---")
@@ -159,21 +173,16 @@ if ss.mode == "有料機能":
         c1, _, c2 = st.columns([4, 1, 4])
         from_c = c1.selectbox("元", cur_list, index=cur_list.index("USD"))
         to_c = c2.selectbox("先", cur_list, index=cur_list.index("JPY"))
-        # 入力欄の値をディスプレイの現在の数式に同期
-        current_display = ss.formula if ss.formula and ss.formula != "Error" else "0"
-        input_v = st.text_input("数値", value=current_display)
+        input_v = st.text_input("数値", value=ss.formula if ss.formula != "Error" else "0")
         st.markdown('<div class="premium-btn">', unsafe_allow_html=True)
         if st.button(f"変換実行"):
-            try:
-                val = parse_formula(input_v)
-                ss.formula = format((val / rates[from_c]) * rates[to_c], '.10g')
-                ss.last_was_equal = True; st.rerun()
-            except: ss.formula = "Error"; st.rerun()
+            val = parse_formula(input_v)
+            ss.formula = format((val / rates[from_c]) * rates[to_c], '.10g')
+            ss.last_was_equal = True; st.rerun()
 
 elif ss.mode != "通常":
-    # 巨数モードや科学計算モードのボタン
     extra = []
-    if ss.mode == "巨数": extra = list(SI_PREFIXES.keys())
+    if ss.mode == "巨数": extra = [p[0] for p in SI_PREFIXES]
     elif ss.mode == "科学計算": extra = ["sin(", "cos(", "tan(", "°", "abs(", "log("]
     elif ss.mode == "値数": extra = ["平均([", "中央値([", "最頻値([", "最大([", "最小([", "])", "偏差値(", "期待値(", ","]
     e_cols = st.columns(6)

@@ -19,7 +19,7 @@ st.components.v1.html("""
 </script>
 """, height=0)
 
-# --- CSS（OSモード連動カラー・巨大ボタン） ---
+# --- CSS（OSモード連動・間隔調整） ---
 st.markdown("""
 <style>
     .main .block-container { max-width: 100% !important; padding: 10px !important; }
@@ -43,8 +43,11 @@ st.markdown("""
         border: 1px solid var(--text-color) !important; border-radius: 8px !important;
     }
     
-    div.stButton > button[key="btn_del_main"] { background-color: #FF4B4B !important; color: white !important; height: 85px !important; font-size: 26px !important; border: none !important; }
-    div.stButton > button[key="btn_exe_main"] { background-color: #28a745 !important; color: white !important; height: 85px !important; font-size: 45px !important; border: none !important; }
+    /* DELETEとイコールの間隔を極限まで狭く */
+    .tight-gap [data-testid="stHorizontalBlock"] { gap: 0px !important; }
+
+    div.stButton > button[key="btn_del_main"] { background-color: #FF4B4B !important; color: white !important; height: 85px !important; font-size: 26px !important; border: none !important; border-radius: 8px 0px 0px 8px !important; }
+    div.stButton > button[key="btn_exe_main"] { background-color: #28a745 !important; color: white !important; height: 85px !important; font-size: 45px !important; border: none !important; border-radius: 0px 8px 8px 0px !important; }
     
     .tax-result-box {
         background-color: rgba(128,128,128,0.1); border-radius: 8px; padding: 20px; margin-top: 15px;
@@ -53,16 +56,12 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 強化版：SI接頭語・日本語解析ロジック ---
+# --- 解析ロジック ---
 def parse_val_advanced(text):
     if not text: return 0.0
     s = str(text).replace(',', '').strip()
-    # 日本語単位
     units = {"兆": 1e12, "億": 1e8, "万": 1e4, "千": 1e3}
-    # SI接頭語
     si = {'Q':1e30,'R':1e27,'Y':1e24,'Z':1e21,'E':1e18,'P':1e15,'T':1e12,'G':1e9,'M':1e6,'k':1e3,'h':1e2,'da':10,'d':0.1,'c':0.01,'m':0.001,'μ':1e-6,'n':1e-9,'p':1e-12,'f':1e-15,'a':1e-18,'z':1e-21,'y':1e-24}
-    
-    # 日本語解析
     total = 0.0
     temp_s = s
     for u, v in units.items():
@@ -77,17 +76,14 @@ def parse_val_advanced(text):
             try: total += float(temp_s)
             except: pass
         return total
-
-    # SI接頭語解析
     for k, v in si.items():
         if s.endswith(k):
             try: return float(s[:-len(k)]) * v
             except: pass
-    
     try: return float(s.replace('Error','0'))
     except: return 0.0
 
-# --- 各種計算関数 ---
+# --- 税金計算ロジック ---
 def calc_inheritance(assets, heirs):
     ex = 30000000 + (6000000 * heirs)
     taxable = assets - ex
@@ -120,10 +116,10 @@ def calc_corp_tax(profit):
 def calc_gift(amt, is_special):
     t = amt - 1100000
     if t <= 0: return 0
-    steps = [(2000000, 0.1, 0), (4000000, 0.15, 100000), (6000000, 0.2, 300000), (10000000, 0.3, 900000), (15000000, 0.4, 1900000), (30000000, 0.45, 2650000), (45000000, 0.5, 4150000)] if is_special else [(2000000, 0.1, 0), (3000000, 0.15, 100000), (4000000, 0.2, 250000), (6000000, 0.3, 650000), (10000000, 0.4, 1250000), (15000000, 0.45, 1750000), (30000000, 0.5, 2500000)]
+    steps = [(2e6, 0.1, 0), (4e6, 0.15, 1e5), (6e6, 0.2, 3e5), (1e7, 0.3, 9e5), (1.5e7, 0.4, 1.9e6), (3e7, 0.45, 2.65e6), (4.5e7, 0.5, 4.15e6)] if is_special else [(2e6, 0.1, 0), (3e6, 0.15, 1e5), (4e6, 0.2, 2.5e5), (6e6, 0.3, 6.5e5), (1e7, 0.4, 1.25e6), (1.5e7, 0.45, 1.75e6), (3e7, 0.5, 2.5e6)]
     for limit, r, d in steps:
         if t <= limit: return t * r - d
-    return t * 0.55 - (6400000 if is_special else 4000000)
+    return t * 0.55 - (6.4e6 if is_special else 4e6)
 
 # --- 状態管理 ---
 if 'f_state' not in st.session_state: st.session_state.f_state = ""
@@ -141,16 +137,21 @@ cols = st.columns(6)
 for i, k in enumerate(keys):
     if cols[i % 6].button(k, key=f"k_{i}"): st.session_state.f_state += k; st.rerun()
 
+st.markdown('<div class="tight-gap">', unsafe_allow_html=True)
 c_exe = st.columns(2)
 with c_exe[0]:
     if st.button("DELETE", key="btn_del_main"): st.session_state.f_state = ""; st.rerun()
 with c_exe[1]:
     if st.button("＝", key="btn_exe_main"):
         try:
-            f = st.session_state.f_state.replace('×','*').replace('÷','/').replace('−','-').replace('^^','**').replace('π', 'math.pi').replace('e', 'math.e').replace('√', 'math.sqrt').replace('mean', 'statistics.mean').replace('median', 'statistics.median').replace('mode', 'statistics.mode').replace('stdev', 'statistics.stdev')
+            f = st.session_state.f_state.replace('×','*').replace('÷','/').replace('−','-').replace('^^','**').replace('π', 'math.pi').replace('e', 'math.e').replace('√', 'math.sqrt')
+            # 度数法(°)をラジアンに変換
+            f = f.replace('°', '*math.pi/180')
+            f = f.replace('mean', 'statistics.mean').replace('median', 'statistics.median').replace('mode', 'statistics.mode').replace('stdev', 'statistics.stdev')
             st.session_state.f_state = format(eval(f), '.10g')
         except: st.session_state.f_state = "Error"
         st.rerun()
+st.markdown('</div>', unsafe_allow_html=True)
 
 st.divider()
 mc = st.columns(5)
@@ -165,7 +166,7 @@ if st.session_state.m_state == "有料機能":
     if st.session_state.paid_sub == "税金":
         t_type = st.selectbox("税種", ["所得税", "相続税", "法人税", "贈与税(一般)", "贈与税(特例)", "固定資産税", "税込10%", "税込8%"])
         heirs = st.select_slider("相続人数", options=list(range(1, 11))) if t_type == "相続税" else 1
-        t_in = st.text_input("金額 (SI接頭語OK: 100k, 1M等)")
+        t_in = st.text_input("金額 (10k, 1M等入力可)")
         if st.button("計算実行"):
             v = parse_val_advanced(t_in if t_in else st.session_state.f_state)
             if t_type == "所得税": r = calc_income_tax(v)
@@ -180,23 +181,23 @@ if st.session_state.m_state == "有料機能":
     elif st.session_state.paid_sub == "為替":
         c_list = ["JPY", "USD", "EUR", "GBP", "CNY", "AUD", "XAU (金1g)", "XAG (銀1g)", "COPPER (銅1kg)"]
         cf, ct = st.selectbox("元", c_list), st.selectbox("先", c_list)
-        cv = st.text_input("数量 (SI接頭語OK)", value="1")
+        cv = st.text_input("数量", value="1")
         if st.button("為替変換"):
             try:
-                res_api = requests.get("https://open.er-api.com/v6/latest/USD", timeout=5).json()
-                rates = res_api['rates']
+                rates = requests.get("https://open.er-api.com/v6/latest/USD", timeout=5).json()['rates']
                 m_usd = {"XAU": 2650.0/31.1035, "XAG": 31.0/31.1035, "COPPER": 9.2}
                 f_code, t_code = cf.split(' ')[0], ct.split(' ')[0]
                 v_u = parse_val_advanced(cv) * m_usd[f_code] if f_code in m_usd else parse_val_advanced(cv) / rates[f_code]
                 res = v_u / m_usd[t_code] if t_code in m_usd else v_u * rates[t_code]
                 st.session_state.tax_res = f"結果: {format(res, ',.2f')} {t_code}"
-            except: st.session_state.tax_res = "通信環境を確認してください"
+            except: st.session_state.tax_res = "通信失敗(API)"
             st.rerun()
         st.markdown(f'<div class="tax-result-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)
 
 elif st.session_state.m_state == "科学計算":
     sc = st.columns(4)
-    for i, s in enumerate(["sin(", "cos(", "tan(", "log(", "abs(", "sqrt("]):
+    # 度（°）を追加
+    for i, s in enumerate(["sin(", "cos(", "tan(", "log(", "abs(", "sqrt(", "°"]):
         if sc[i % 4].button(s, key=f"s_{s}"): st.session_state.f_state += s; st.rerun()
 elif st.session_state.m_state == "値数":
     sc = st.columns(4)

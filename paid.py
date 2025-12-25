@@ -97,7 +97,6 @@ def calc_inheritance(assets, heirs):
     return get_step(share) * heirs
 
 def calc_income_tax(income):
-    # 所得税速算表
     if income <= 1950000: return income * 0.05
     elif income <= 3300000: return income * 0.10 - 97500
     elif income <= 6950000: return income * 0.20 - 427500
@@ -105,6 +104,11 @@ def calc_income_tax(income):
     elif income <= 17999000: return income * 0.33 - 1536000
     elif income <= 39999000: return income * 0.40 - 2796000
     else: return income * 0.45 - 4796000
+
+def calc_corp_tax(profit):
+    # 法人税（普通法人の例: 800万以下15%, 超過23.2%）
+    if profit <= 8000000: return profit * 0.15
+    else: return (8000000 * 0.15) + ((profit - 8000000) * 0.232)
 
 def calc_gift(amt, is_special):
     t = amt - 1100000
@@ -161,12 +165,13 @@ if st.session_state.m_state == "有料機能":
     if sub_c[1].button("為替・貴金属メニュー"): st.session_state.paid_sub = "為替"; st.rerun()
 
     if st.session_state.paid_sub == "税金":
-        t_type = st.selectbox("税種", ["所得税", "相続税", "贈与税(一般)", "贈与税(特例)", "固定資産税", "税込10%", "税込8%"])
+        t_type = st.selectbox("税種", ["法人税", "所得税", "相続税", "贈与税(一般)", "贈与税(特例)", "固定資産税", "税込10%", "税込8%"])
         heirs = st.select_slider("相続人数", options=list(range(1, 11))) if t_type == "相続税" else 1
-        t_in = st.text_input("金額 (例: 1000万, 3億)")
+        t_in = st.text_input("計算する金額 (例: 1000万, 3億)")
         if st.button("実行"):
             v = parse_val(t_in if t_in else st.session_state.f_state)
-            if t_type == "所得税": r = calc_income_tax(v)
+            if t_type == "法人税": r = calc_corp_tax(v)
+            elif t_type == "所得税": r = calc_income_tax(v)
             elif t_type == "相続税": r = calc_inheritance(v, heirs)
             elif "贈与税" in t_type: r = calc_gift(v, "特例" in t_type)
             elif t_type == "固定資産税": r = v * 0.014
@@ -175,16 +180,21 @@ if st.session_state.m_state == "有料機能":
         st.markdown(f'<div class="tax-result-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)
 
     elif st.session_state.paid_sub == "為替":
-        c_list = ["JPY", "USD", "EUR", "XAU (金1g)", "XAG (銀1g)"]
+        c_list = ["JPY", "USD", "EUR", "GBP", "CNY", "AUD", "XAU (金1g)", "XAG (銀1g)", "COPPER (銅1kg)"]
         cf, ct = st.selectbox("元", c_list), st.selectbox("先", c_list)
         cv = st.text_input("数量", value="1")
-        if st.button("変換"):
+        if st.button("変換実行"):
             try:
                 rates = requests.get("https://open.er-api.com/v6/latest/USD", timeout=3).json()['rates']
-                m_usd = {"XAU": 2650.0/31.1035, "XAG": 31.0/31.1035}
-                v_u = parse_val(cv) * m_usd[cf.split(' ')[0]] if cf.split(' ')[0] in m_usd else parse_val(cv) / rates[cf.split(' ')[0]]
-                res = v_u / m_usd[ct.split(' ')[0]] if ct.split(' ')[0] in m_usd else v_u * rates[ct.split(' ')[0]]
-                st.session_state.tax_res = f"結果: {format(res, ',.2f')} {ct.split(' ')[0]}"; st.rerun()
+                # USDベースの金属単価（参考）
+                m_usd = {"XAU": 2650.0/31.1035, "XAG": 31.0/31.1035, "COPPER": 9.2}
+                # 変換元を一度USDに
+                f_code = cf.split(' ')[0]
+                v_u = parse_val(cv) * m_usd[f_code] if f_code in m_usd else parse_val(cv) / rates[f_code]
+                # USDから変換先へ
+                t_code = ct.split(' ')[0]
+                res = v_u / m_usd[t_code] if t_code in m_usd else v_u * rates[t_code]
+                st.session_state.tax_res = f"結果: {format(res, ',.2f')} {t_code}"; st.rerun()
             except: st.error("通信失敗")
         st.markdown(f'<div class="tax-result-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)
 

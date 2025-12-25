@@ -19,32 +19,22 @@ st.components.v1.html("""
 </script>
 """, height=0)
 
-# --- 究極のCSS（OSモード連動カラー・巨大ボタン） ---
+# --- CSS（OSモード連動カラー・巨大ボタン） ---
 st.markdown("""
 <style>
     .main .block-container { max-width: 100% !important; padding: 10px !important; }
     header {visibility: hidden;}
     
-    /* モード連動カラー設定 */
     :root {
-        --bg-color: #FFFFFF;
-        --text-color: #000000;
-        --btn-bg: #000000;
-        --btn-text: #FFFFFF;
+        --bg-color: #FFFFFF; --text-color: #000000; --btn-bg: #000000; --btn-text: #FFFFFF;
     }
     @media (prefers-color-scheme: dark) {
         :root {
-            --bg-color: #000000;
-            --text-color: #FFFFFF;
-            --btn-bg: #FFFFFF;
-            --btn-text: #000000;
+            --bg-color: #000000; --text-color: #FFFFFF; --btn-bg: #FFFFFF; --btn-text: #000000;
         }
     }
 
-    .app-title-box {
-        text-align: center; font-size: 26px; font-weight: 900; 
-        color: var(--text-color); border-bottom: 3px solid; margin-bottom: 15px;
-    }
+    .app-title-box { text-align: center; font-size: 26px; font-weight: 900; color: var(--text-color); border-bottom: 3px solid; margin-bottom: 15px; }
 
     .display-container {
         display: flex; align-items: center; justify-content: flex-end;
@@ -53,29 +43,16 @@ st.markdown("""
         color: var(--text-color); word-break: break-all;
     }
     
-    /* ボタンの共通設定 */
     div.stButton > button {
-        width: 100% !important;
-        height: 60px !important;
-        font-weight: 900 !important;
-        font-size: 20px !important;
-        background-color: var(--btn-bg) !important;
-        color: var(--btn-text) !important;
-        border: 1px solid var(--text-color) !important;
-        border-radius: 8px !important;
+        width: 100% !important; height: 60px !important; font-weight: 900 !important; font-size: 20px !important;
+        background-color: var(--btn-bg) !important; color: var(--btn-text) !important;
+        border: 1px solid var(--text-color) !important; border-radius: 8px !important;
     }
     
     [data-testid="stHorizontalBlock"] { gap: 5px !important; }
 
-    /* DELETEボタン（赤固定） */
-    div.stButton > button[key="btn_del_main"] {
-        background-color: #FF4B4B !important; color: white !important; height: 85px !important; font-size: 26px !important; border: none !important;
-    }
-
-    /* ＝ボタン（緑固定） */
-    div.stButton > button[key="btn_exe_main"] {
-        background-color: #28a745 !important; color: white !important; height: 85px !important; font-size: 45px !important; border: none !important;
-    }
+    div.stButton > button[key="btn_del_main"] { background-color: #FF4B4B !important; color: white !important; height: 85px !important; font-size: 26px !important; border: none !important; }
+    div.stButton > button[key="btn_exe_main"] { background-color: #28a745 !important; color: white !important; height: 85px !important; font-size: 45px !important; border: none !important; }
     
     .tax-result-box {
         background-color: rgba(128,128,128,0.1); border-radius: 8px; padding: 20px; margin-top: 15px;
@@ -84,7 +61,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- ロジック関数 ---
+# --- 計算ロジック ---
 def parse_val(text):
     if not text: return 0.0
     s = str(text).replace(',', '').strip()
@@ -104,8 +81,8 @@ def parse_val(text):
     except: return 0.0
 
 def calc_inheritance(assets, heirs):
-    exemption = 30000000 + (6000000 * heirs)
-    taxable = assets - exemption
+    ex = 30000000 + (6000000 * heirs)
+    taxable = assets - ex
     if taxable <= 0: return 0
     share = taxable / heirs
     def get_step(a):
@@ -119,33 +96,35 @@ def calc_inheritance(assets, heirs):
         else: return a * 0.55 - 72000000
     return get_step(share) * heirs
 
+def calc_income_tax(income):
+    # 所得税速算表
+    if income <= 1950000: return income * 0.05
+    elif income <= 3300000: return income * 0.10 - 97500
+    elif income <= 6950000: return income * 0.20 - 427500
+    elif income <= 8999000: return income * 0.23 - 636000
+    elif income <= 17999000: return income * 0.33 - 1536000
+    elif income <= 39999000: return income * 0.40 - 2796000
+    else: return income * 0.45 - 4796000
+
 def calc_gift(amt, is_special):
-    target = amt - 1100000
-    if target <= 0: return 0
+    t = amt - 1100000
+    if t <= 0: return 0
     if is_special:
-        if target <= 2000000: r, d = 0.10, 0
-        elif target <= 4000000: r, d = 0.15, 100000
-        elif target <= 6000000: r, d = 0.20, 300000
-        elif target <= 10000000: r, d = 0.30, 900000
-        elif target <= 15000000: r, d = 0.40, 1900000
-        elif target <= 30000000: r, d = 0.45, 2650000
-        elif target <= 45000000: r, d = 0.50, 4150000
-        else: r, d = 0.55, 6400000
+        steps = [(2000000, 0.1, 0), (4000000, 0.15, 100000), (6000000, 0.2, 300000), (10000000, 0.3, 900000), (15000000, 0.4, 1900000), (30000000, 0.45, 2650000), (45000000, 0.5, 4150000)]
+        for limit, r, d in steps:
+            if t <= limit: return t * r - d
+        return t * 0.55 - 6400000
     else:
-        if target <= 2000000: r, d = 0.10, 0
-        elif target <= 3000000: r, d = 0.15, 100000
-        elif target <= 4000000: r, d = 0.20, 250000
-        elif target <= 6000000: r, d = 0.30, 650000
-        elif target <= 10000000: r, d = 0.40, 1250000
-        elif target <= 15000000: r, d = 0.45, 1750000
-        elif target <= 30000000: r, d = 0.50, 2500000
-        else: r, d = 0.55, 4000000
-    return target * r - d
+        steps = [(2000000, 0.1, 0), (3000000, 0.15, 100000), (4000000, 0.2, 250000), (6000000, 0.3, 650000), (10000000, 0.4, 1250000), (15000000, 0.45, 1750000), (30000000, 0.5, 2500000)]
+        for limit, r, d in steps:
+            if t <= limit: return t * r - d
+        return t * 0.55 - 4000000
 
 # --- 状態管理 ---
 if 'f_state' not in st.session_state: st.session_state.f_state = ""
 if 'tax_res' not in st.session_state: st.session_state.tax_res = "結果表示"
 if 'm_state' not in st.session_state: st.session_state.m_state = "通常"
+if 'paid_sub' not in st.session_state: st.session_state.paid_sub = "税金"
 
 # --- UI表示 ---
 st.markdown('<div class="app-title-box">Python Calculator Premium</div>', unsafe_allow_html=True)
@@ -157,7 +136,6 @@ cols = st.columns(6)
 for i, k in enumerate(keys):
     if cols[i % 6].button(k, key=f"k_{i}"): st.session_state.f_state += k; st.rerun()
 
-# DELETEと＝
 c_exe = st.columns(2)
 with c_exe[0]:
     if st.button("DELETE", key="btn_del_main"): st.session_state.f_state = ""; st.rerun()
@@ -171,44 +149,57 @@ with c_exe[1]:
 
 st.divider()
 
-# モード切替（税金と為替を分離）
-modes = ["通常", "科学計算", "値数", "税金", "為替"]
+# メインモード切替
+modes = ["通常", "科学計算", "値数", "拡縮", "有料機能"]
 mc = st.columns(5)
 for i, m in enumerate(modes):
     if mc[i].button(m, key=f"m_{m}"): st.session_state.m_state = m; st.rerun()
 
-# 各モードのUI
-if st.session_state.m_state == "税金":
-    t_type = st.selectbox("税金の種類", ["相続税", "贈与税(一般)", "贈与税(特例)", "固定資産税", "税込10%", "税込8%"])
-    heirs = st.select_slider("法定相続人の数", options=list(range(1, 11))) if t_type == "相続税" else 1
-    t_in = st.text_input("計算する金額 (例: 5億, 3000万)")
-    if st.button("税金計算実行"):
-        v = parse_val(t_in if t_in else st.session_state.f_state)
-        if t_type == "相続税": r = calc_inheritance(v, heirs)
-        elif "贈与税" in t_type: r = calc_gift(v, "特例" in t_type)
-        elif t_type == "固定資産税": r = v * 0.014
-        else: r = v * 1.1 if "10%" in t_type else v * 1.08
-        st.session_state.tax_res = f"{t_type}: {format(int(r), ',')} 円"; st.rerun()
-    st.markdown(f'<div class="tax-result-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)
+if st.session_state.m_state == "有料機能":
+    sub_c = st.columns(2)
+    if sub_c[0].button("税金計算メニュー"): st.session_state.paid_sub = "税金"; st.rerun()
+    if sub_c[1].button("為替・貴金属メニュー"): st.session_state.paid_sub = "為替"; st.rerun()
 
-elif st.session_state.m_state == "為替":
-    c_list = ["JPY", "USD", "EUR", "CNY", "XAU (金1g)", "XAG (銀1g)"]
-    cf, ct = st.selectbox("変換元", c_list), st.selectbox("変換先", c_list)
-    cv = st.text_input("数量", value="1")
-    if st.button("為替・貴金属 変換実行"):
-        try:
-            rates = requests.get("https://open.er-api.com/v6/latest/USD", timeout=3).json()['rates']
-            m_usd = {"XAU": 2650.0/31.1035, "XAG": 31.0/31.1035}
-            v_u = parse_val(cv) * m_usd[cf.split(' ')[0]] if cf.split(' ')[0] in m_usd else parse_val(cv) / rates[cf.split(' ')[0]]
-            res = v_u / m_usd[ct.split(' ')[0]] if ct.split(' ')[0] in m_usd else v_u * rates[ct.split(' ')[0]]
-            st.session_state.tax_res = f"結果: {format(res, ',.2f')} {ct.split(' ')[0]}"; st.rerun()
-        except: st.error("データ取得失敗")
-    st.markdown(f'<div class="tax-result-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)
+    if st.session_state.paid_sub == "税金":
+        t_type = st.selectbox("税種", ["所得税", "相続税", "贈与税(一般)", "贈与税(特例)", "固定資産税", "税込10%", "税込8%"])
+        heirs = st.select_slider("相続人数", options=list(range(1, 11))) if t_type == "相続税" else 1
+        t_in = st.text_input("金額 (例: 1000万, 3億)")
+        if st.button("実行"):
+            v = parse_val(t_in if t_in else st.session_state.f_state)
+            if t_type == "所得税": r = calc_income_tax(v)
+            elif t_type == "相続税": r = calc_inheritance(v, heirs)
+            elif "贈与税" in t_type: r = calc_gift(v, "特例" in t_type)
+            elif t_type == "固定資産税": r = v * 0.014
+            else: r = v * 1.1 if "10%" in t_type else v * 1.08
+            st.session_state.tax_res = f"{t_type}: {format(int(r), ',')} 円"; st.rerun()
+        st.markdown(f'<div class="tax-result-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)
+
+    elif st.session_state.paid_sub == "為替":
+        c_list = ["JPY", "USD", "EUR", "XAU (金1g)", "XAG (銀1g)"]
+        cf, ct = st.selectbox("元", c_list), st.selectbox("先", c_list)
+        cv = st.text_input("数量", value="1")
+        if st.button("変換"):
+            try:
+                rates = requests.get("https://open.er-api.com/v6/latest/USD", timeout=3).json()['rates']
+                m_usd = {"XAU": 2650.0/31.1035, "XAG": 31.0/31.1035}
+                v_u = parse_val(cv) * m_usd[cf.split(' ')[0]] if cf.split(' ')[0] in m_usd else parse_val(cv) / rates[cf.split(' ')[0]]
+                res = v_u / m_usd[ct.split(' ')[0]] if ct.split(' ')[0] in m_usd else v_u * rates[ct.split(' ')[0]]
+                st.session_state.tax_res = f"結果: {format(res, ',.2f')} {ct.split(' ')[0]}"; st.rerun()
+            except: st.error("通信失敗")
+        st.markdown(f'<div class="tax-result-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)
 
 elif st.session_state.m_state == "科学計算":
     sc = st.columns(4)
     for i, s in enumerate(["sin(", "cos(", "tan(", "log(", "abs(", "sqrt("]):
         if sc[i % 4].button(s, key=f"s_{s}"): st.session_state.f_state += s; st.rerun()
+
+elif st.session_state.m_state == "拡縮":
+    si = ["Q","R","Y","Z","E","P","T","G","M","k","h","da","d","c","m","μ","n","p","f","a","z","y","r","q"]
+    uc = st.columns(6)
+    for i, u in enumerate(si):
+        if uc[i % 6].button(u, key=f"si_{u}"):
+            if not st.session_state.f_state or st.session_state.f_state[-1] not in si:
+                st.session_state.f_state += u; st.rerun()
 
 elif st.session_state.m_state == "値数":
     sc = st.columns(4)

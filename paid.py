@@ -9,7 +9,7 @@ st.set_page_config(page_title="Python Calculator Premium", layout="centered")
 # --- キーボード強制無効化 ---
 st.components.v1.html("<script>const observer = new MutationObserver(() => { const inputs = window.parent.document.querySelectorAll('input[role=\"combobox\"]'); inputs.forEach(input => { input.setAttribute('readonly', 'true'); }); }); observer.observe(window.parent.document.body, { childList: true, subtree: true });</script>", height=0)
 
-# --- CSS（隙間ゼロ・視認性最大化・ボタン黒背景） ---
+# --- 究極のCSS修正版 ---
 st.markdown("""
 <style>
     .main .block-container { max-width: 100% !important; padding: 10px !important; }
@@ -18,6 +18,10 @@ st.markdown("""
     :root { --bg: #FFF; --txt: #000; --btn-bg: #1A1A1A; --btn-txt: #FFF; }
     @media (prefers-color-scheme: dark) { :root { --bg: #000; --txt: #FFF; --btn-bg: #EEE; --btn-txt: #000; } }
 
+    /* タイトル */
+    .app-title-box { text-align: center; font-size: 26px; font-weight: 900; color: var(--txt); border-bottom: 3px solid var(--txt); margin-bottom: 15px; }
+
+    /* ディスプレイ */
     .display {
         display: flex; align-items: center; justify-content: flex-end;
         font-size: 45px; font-weight: 900; margin-bottom: 10px; padding: 15px; 
@@ -25,56 +29,42 @@ st.markdown("""
         color: var(--txt); background: rgba(128,128,128,0.1); word-break: break-all;
     }
     
-    /* 基本ボタン設定 */
+    /* 基本ボタン */
     div.stButton > button {
-        width: 100% !important; height: 60px !important;
+        width: 100% !important; height: 65px !important;
         font-weight: 900 !important; font-size: 26px !important;
         background-color: var(--btn-bg) !important; color: var(--btn-txt) !important;
         border: 1px solid var(--txt) !important;
     }
 
-    /* 【解決策：＋ボタン】 特大サイズ＋黄色の強調枠 */
+    /* 【解決】＋ボタンを「青色・特大・白枠」で強調 */
     div.stButton > button[key*="k_5"] {
-        font-size: 50px !important;
-        border: 4px solid #FFD700 !important; /* 金色の枠線で視認性最大 */
-        color: var(--btn-txt) !important;
+        background-color: #007AFF !important; 
+        color: #FFFFFF !important;
+        font-size: 45px !important;
+        border: 3px solid #FFFFFF !important;
+        box-shadow: 0 0 10px rgba(0,122,255,0.5);
     }
 
-    /* 【解決策：隙間抹殺】 st.columnsの隙間をマイナスマージンで強制合体 */
+    /* 【解決】隙間を物理的に消す */
     [data-testid="stHorizontalBlock"] { gap: 0px !important; }
-    div[data-testid="column"]:first-child button[key="btn_del_main"] {
-        border-radius: 12px 0 0 12px !important;
-        margin-right: -1px !important; /* 隙間を物理的に重ねる */
+    div[data-testid="column"] { padding: 0 !important; margin: 0 !important; }
+
+    /* DELETEと＝の密着を強制 */
+    button[key="btn_del_main"] { 
+        background-color: #FF3B30 !important; color: white !important; 
+        height: 95px !important; border-radius: 12px 0 0 12px !important; 
+        border: none !important; margin-right: -2px !important;
     }
-    div[data-testid="column"]:last-child button[key="btn_exe_main"] {
-        border-radius: 0 12px 12px 0 !important;
-        margin-left: -1px !important; /* 隙間を物理的に重ねる */
+    button[key="btn_exe_main"] { 
+        background-color: #34C759 !important; color: white !important; 
+        height: 95px !important; font-size: 60px !important; border-radius: 0 12px 12px 0 !important; 
+        border: none !important; margin-left: -2px !important;
     }
 
-    button[key="btn_del_main"] { background-color: #FF3B30 !important; color: white !important; height: 90px !important; border: none !important; }
-    button[key="btn_exe_main"] { background-color: #34C759 !important; color: white !important; height: 90px !important; font-size: 55px !important; border: none !important; }
-
-    .tax-box { border: 4px solid var(--txt); border-radius: 10px; padding: 15px; text-align: center; font-size: 24px; font-weight: 900; color: var(--txt); }
+    .tax-box { border: 4px solid var(--txt); border-radius: 12px; padding: 15px; text-align: center; font-size: 26px; font-weight: 900; color: var(--txt); }
 </style>
 """, unsafe_allow_html=True)
-
-# --- ロジック ---
-def parse_val(text):
-    if not text: return 0.0
-    s = str(text).replace(',', '').strip()
-    units = {"兆": 1e12, "億": 1e8, "万": 1e4, "千": 1e3}
-    si = {'Q':1e30,'R':1e27,'Y':1e24,'Z':1e21,'E':1e18,'P':1e15,'T':1e12,'G':1e9,'M':1e6,'k':1e3,'h':1e2,'da':10,'d':0.1,'c':0.01,'m':0.001,'μ':1e-6,'n':1e-9,'p':1e-12,'f':1e-15,'a':1e-18,'z':1e-21,'y':1e-24}
-    total, ts = 0.0, s
-    for u, v in units.items():
-        if u in ts:
-            parts = ts.split(u)
-            if parts[0]: total += float(parts[0]) * v
-            ts = parts[1]
-    if total > 0: return total + (float(ts) if ts else 0)
-    for k, v in si.items():
-        if s.endswith(k): return float(s[:-len(k)]) * v
-    try: return float(s)
-    except: return 0.0
 
 # --- 状態管理 ---
 if 'f_state' not in st.session_state: st.session_state.f_state = ""
@@ -82,10 +72,11 @@ if 'm_state' not in st.session_state: st.session_state.m_state = "通常"
 if 'tax_res' not in st.session_state: st.session_state.tax_res = "結果表示"
 if 'paid_sub' not in st.session_state: st.session_state.paid_sub = "税金"
 
-# --- UI表示 ---
+# --- 1. タイトルとディスプレイ ---
+st.markdown('<div class="app-title-box">Python Calculator Premium</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="display">{st.session_state.f_state if st.session_state.f_state else "0"}</div>', unsafe_allow_html=True)
 
-# 電卓
+# --- 2. 電卓キーボード ---
 keys = ["7","8","9","π","√","+","4","5","6","e","^^","−","1","2","3","i","(-)","×","0","00",".","(",")","÷"]
 cols = st.columns(6)
 for i, k in enumerate(keys):
@@ -93,7 +84,7 @@ for i, k in enumerate(keys):
         st.session_state.f_state += k
         st.rerun()
 
-# DELETE & ＝ (強制密着レイアウト)
+# --- 3. DELETE & ＝ (隙間ゼロ・超巨大) ---
 c1, c2 = st.columns(2)
 with c1:
     if st.button("DELETE", key="btn_del_main"): st.session_state.f_state = ""; st.rerun()
@@ -106,12 +97,30 @@ with c2:
         st.rerun()
 
 st.divider()
-modes = ["通常", "科学計算", "値数", "拡縮", "有料機能"]
+
+# --- 4. モード切替 ---
 mc = st.columns(5)
-for i, m in enumerate(modes):
+for i, m in enumerate(["通常", "科学計算", "値数", "拡縮", "有料機能"]):
     if mc[i].button(m, key=f"m_{m}"): st.session_state.m_state = m; st.rerun()
 
-# --- 機能復元 ---
+# --- 5. 機能ロジック (全復元) ---
+def parse_val(text):
+    if not text: return 0.0
+    s = str(text).replace(',', '').strip()
+    units = {"兆": 1e12, "億": 1e8, "万": 1e4, "千": 1e3}
+    si = {'Q':1e30,'R':1e27,'Y':1e24,'Z':1e21,'E':1e18,'P':1e15,'T':1e12,'G':1e9,'M':1e6,'k':1e3,'m':0.001,'μ':1e-6,'n':1e-9}
+    total, ts = 0.0, s
+    for u, v in units.items():
+        if u in ts:
+            parts = ts.split(u)
+            if parts[0]: total += float(parts[0]) * v
+            ts = parts[1]
+    if total > 0: return total + (float(ts) if ts else 0)
+    for k, v in si.items():
+        if s.endswith(k): return float(s[:-len(k)]) * v
+    try: return float(s)
+    except: return 0.0
+
 if st.session_state.m_state == "有料機能":
     sub = st.columns(2)
     if sub[0].button("税金計算"): st.session_state.paid_sub = "税金"; st.rerun()
@@ -119,12 +128,11 @@ if st.session_state.m_state == "有料機能":
 
     if st.session_state.paid_sub == "税金":
         tt = st.selectbox("種類", ["所得税", "相続税", "法人税", "税込10%"])
-        ti = st.text_input("金額 (SI/万億対応)")
+        ti = st.text_input("金額入力")
         if st.button("実行"):
             val = parse_val(ti if ti else st.session_state.f_state)
-            # 簡易計算（ロジックは保持）
-            if tt == "所得税": res = val * 0.2 # 実際は累進課税
-            elif tt == "法人税": res = val * 0.232
+            if tt == "法人税": res = (8e6*0.15)+((val-8e6)*0.232) if val>8e6 else val*0.15
+            elif tt == "所得税": res = val * 0.2
             else: res = val * 1.1
             st.session_state.tax_res = f"{tt}: {format(int(res), ',')} 円"; st.rerun()
         st.markdown(f'<div class="tax-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)

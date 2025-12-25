@@ -7,7 +7,7 @@ import re
 # --- ページ設定 ---
 st.set_page_config(page_title="Python Calculator Premium", layout="centered")
 
-# --- 強力なレイアウト固定CSS ---
+# --- レイアウト修正CSS ---
 st.markdown("""
 <style>
     :root { --bg-page: #FFFFFF; --text-display: #000000; --btn-bg: #000000; --btn-text: #FFFFFF; }
@@ -20,16 +20,17 @@ st.markdown("""
     
     .display-container {
         display: flex; align-items: center; justify-content: flex-end;
-        font-size: 45px; font-weight: 900; margin-bottom: 15px; padding: 10px; 
-        border-bottom: 5px solid var(--text-display); min-height: 80px; color: var(--text-display); word-break: break-all;
+        font-size: 38px; font-weight: 900; margin-bottom: 15px; padding: 15px; 
+        border-bottom: 5px solid var(--text-display); min-height: 90px; color: var(--text-display); word-break: break-all;
+        background: transparent;
     }
 
-    /* ボタンのサイズ・余白を完全に統一 */
+    /* ボタンのレイアウト固定 */
     div.stButton > button {
-        width: 100% !important; height: 50px !important; border-radius: 4px !important;
+        width: 100% !important; height: 50px !important; border-radius: 6px !important;
         background-color: var(--btn-bg) !important; color: var(--btn-text) !important;
-        font-weight: 900; font-size: 15px; border: 1px solid var(--text-display) !important;
-        margin: 0 !important;
+        font-weight: 900; font-size: 14px; border: 1px solid var(--text-display) !important;
+        margin-bottom: 5px !important;
     }
     
     .del-btn div.stButton > button { background-color: #FF4B4B !important; color: white !important; border: none !important; }
@@ -50,7 +51,9 @@ def calculate_income_tax(income, dependents):
 
 def parse_val(formula):
     if not formula or formula == "Error": return 0.0
-    f = str(formula).replace('×', '*').replace('÷', '/').replace('−', '-').replace('^^', '**')
+    # ラベルがついている場合は数字部分だけ抽出
+    clean_f = str(formula).split(':')[-1].strip()
+    f = clean_f.replace('×', '*').replace('÷', '/').replace('−', '-').replace('^^', '**')
     si = {'Q':1e30,'R':1e27,'Y':1e24,'Z':1e21,'E':1e18,'P':1e15,'T':1e12,'G':1e9,'M':1e6,'k':1e3,'h':1e2,'da':10,'d':0.1,'c':0.01,'m':0.001,'μ':1e-6,'n':1e-9,'p':1e-12,'f':1e-15,'a':1e-18,'z':1e-21,'y':1e-24,'r':1e-27,'q':1e-30}
     for k, v in si.items():
         if k in f: f = re.sub(f'(\\d+){k}', f'(\\1*{v})', f)
@@ -69,15 +72,17 @@ if 'last_was_eq' not in st.session_state: st.session_state.last_was_eq = False
 st.markdown('<div class="app-title">Python Calculator Premium</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="display-container">{st.session_state.formula_state if st.session_state.formula_state else "0"}</div>', unsafe_allow_html=True)
 
-# 電卓本体 (6列)
+# 電卓本体
 keys = ["7","8","9","π","√","+","4","5","6","e","^^","−","1","2","3","i","(-)","×","0","00",".","(",")","÷"]
 cols = st.columns(6)
 for i, k in enumerate(keys):
     if cols[i % 6].button(k, key=f"k_{k}_{i}"):
-        if st.session_state.last_was_eq: st.session_state.formula_state = ""; st.session_state.last_was_eq = False
+        if st.session_state.last_was_eq or ":" in st.session_state.formula_state: 
+            st.session_state.formula_state = ""
+            st.session_state.last_was_eq = False
         st.session_state.formula_state += k; st.rerun()
 
-# delete と ＝ (2列で完全固定)
+# ＝ と delete
 c_main = st.columns(2)
 with c_main[0]:
     st.markdown('<div class="del-btn">', unsafe_allow_html=True)
@@ -85,12 +90,13 @@ with c_main[0]:
         st.session_state.formula_state = ""; st.rerun()
 with c_main[1]:
     if st.button("＝", key="main_eq", use_container_width=True):
-        st.session_state.formula_state = format(parse_val(st.session_state.formula_state), '.10g')
+        res = parse_val(st.session_state.formula_state)
+        st.session_state.formula_state = format(res, '.10g')
         st.session_state.last_was_eq = True; st.rerun()
 
 st.divider()
 
-# モード選択 (「単位」を「拡縮」に変更)
+# モード選択
 modes = ["通常", "科学計算", "拡縮", "値数", "有料機能"]
 mc = st.columns(5)
 for i, m in enumerate(modes):
@@ -116,17 +122,31 @@ elif curr_m == "有料機能":
     dep = st.selectbox("扶養人数選択 (38万円/人 控除)", options=list(range(11)), index=0)
     tax_in = st.text_input("数値を入力 (空欄なら電卓の値を使用)", key="tax_input")
     st.divider()
-    taxes = [("所得税", "inc"), ("法人税", "corp"), ("住民税", 0.1), ("贈与税", "gift"), ("税込10%", 1.1), ("税込8%", 1.08)]
+    taxes = [("所得税", "inc"), ("法人税", "corp"), ("住民税", "res"), ("贈与税", "gift"), ("税込10%", 1.1), ("税込8%", 1.08)]
     tc = st.columns(3)
     for i, (label, val) in enumerate(taxes):
         if tc[i % 3].button(label, key=f"tx_{label}"):
             source = tax_in if tax_in else st.session_state.formula_state
             base = parse_val(source)
-            if val == "inc": r = calculate_income_tax(base, dep)
-            elif val == "corp": r = (base * 0.15) if base <= 8000000 else (1200000 + (base - 8000000) * 0.232)
-            elif val == "gift": r = (base - 1100000) * 0.1 # 簡易
-            else: r = base * val
-            st.session_state.formula_state = format(r, '.10g'); st.session_state.last_was_eq = True; st.rerun()
+            label_text = ""
+            if val == "inc": 
+                r = calculate_income_tax(base, dep)
+                label_text = "所得税"
+            elif val == "corp": 
+                r = (base * 0.15) if base <= 8000000 else (1200000 + (base - 8000000) * 0.232)
+                label_text = "法人税"
+            elif val == "res": 
+                r = base * 0.10
+                label_text = "住民税"
+            elif val == "gift": 
+                r = (base - 1100000) * 0.1
+                label_text = "贈与税"
+            else: 
+                r = base * val
+                label_text = label
+            
+            st.session_state.formula_state = f"{label_text}: {format(r, ',.0f')}"
+            st.session_state.last_was_eq = True; st.rerun()
 
 elif curr_m == "科学計算":
     sci = ["sin(", "cos(", "tan(", "log(", "log10(", "abs(", "sqrt("]

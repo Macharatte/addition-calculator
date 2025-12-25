@@ -1,13 +1,11 @@
 import streamlit as st
 import math
 import requests
-import streamlit.components.v1 as components
 
 # --- ページ設定 ---
 st.set_page_config(page_title="Python Calculator Premium", layout="centered")
 
 # --- キーボード強制無効化スクリプト ---
-# セレクトボックス内の入力フィールドをreadonly（読み取り専用）にしてキーボードを阻止
 st.components.v1.html("""
 <script>
     const observer = new MutationObserver(() => {
@@ -101,7 +99,7 @@ if 'sub_mode' not in st.session_state: st.session_state.sub_mode = "税金"
 st.markdown('<div class="app-title">Python Calculator Premium</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="display-container">{st.session_state.formula_state if st.session_state.formula_state else "0"}</div>', unsafe_allow_html=True)
 
-# 電卓
+# 電卓キー
 keys = ["7","8","9","π","√","+","4","5","6","e","^^","−","1","2","3","i","(-)","×","0","00",".","(",")","÷"]
 cols = st.columns(6)
 for i, k in enumerate(keys):
@@ -118,7 +116,7 @@ with c_main[1]:
 
 st.divider()
 
-# モード選択
+# モード切替
 modes = ["通常", "科学計算", "拡縮", "値数", "有料機能"]
 mc = st.columns(5)
 for i, m in enumerate(modes):
@@ -130,42 +128,69 @@ if st.session_state.mode_state == "有料機能":
     if sc2.button("通貨・貴金属", key="go_conv"): st.session_state.sub_mode = "通貨"; st.rerun()
 
     if st.session_state.sub_mode == "税金":
-        t_type = st.selectbox("税金の種類を選択 (選択専用)", ["相続税", "所得税", "法人税", "住民税", "固定資産税", "贈与税", "税込10%", "税込8%"])
-        
+        t_type = st.selectbox("税金の種類", ["相続税", "所得税", "法人税", "住民税", "固定資産税", "贈与税", "税込10%", "税込8%"])
         dep, heirs = 0, 1
         if t_type == "所得税":
-            dep = st.selectbox("扶養人数", options=list(range(11)), index=0)
+            dep = st.selectbox("扶養人数", options=list(range(11)))
         elif t_type == "相続税":
             heirs = st.select_slider("法定相続人の数", options=list(range(1, 21)), value=1)
-            
-        tax_in = st.text_input("金額入力", placeholder="例: 5億, 1200万", key="t_input")
+        tax_in = st.text_input("金額入力", placeholder="例: 1億2000万, 500k")
         st.markdown(f'<div class="tax-result-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)
-        
-        tx_col1, tx_col2 = st.columns(2)
-        with tx_col1:
-            st.markdown('<div class="exe-btn">', unsafe_allow_html=True)
-            if st.button("計算実行"):
-                base = parse_japanese_and_si(tax_in if tax_in else st.session_state.formula_state)
-                if t_type == "相続税": r = calculate_inheritance_tax_precise(base, heirs)
-                elif t_type == "固定資産税": r = base * 0.014
-                elif t_type == "住民税": r = base * 0.10
-                elif t_type == "税込10%": r = base * 1.1
-                else: r = base * 1.08
-                st.session_state.tax_res = f"{t_type}: {format(r, ',.0f')} 円"; st.rerun()
-        with tx_col2:
-            st.markdown('<div class="del-btn">', unsafe_allow_html=True)
-            if st.button("削除"): st.session_state.tax_res = "結果がここに表示されます"; st.rerun()
+        if st.button("計算実行", key="tax_exe"):
+            base = parse_japanese_and_si(tax_in if tax_in else st.session_state.formula_state)
+            if t_type == "相続税": r = calculate_inheritance_tax_precise(base, heirs)
+            elif t_type == "固定資産税": r = base * 0.014
+            elif t_type == "住民税": r = base * 0.10
+            elif t_type == "税込10%": r = base * 1.1
+            else: r = base * 1.08
+            st.session_state.tax_res = f"{t_type}: {format(r, ',.0f')} 円"; st.rerun()
 
     elif st.session_state.sub_mode == "通貨":
         currency_list = ["JPY", "USD", "EUR", "GBP", "CNY", "AUD", "CAD", "CHF", "SGD", "HKD", "KRW", "THB", "TWD", "NZD", "INR", "XAU (金)", "XAG (銀)", "COPPER (銅)"]
-        c_from = st.selectbox("変換元 (選択専用)", currency_list)
-        c_to = st.selectbox("変換先 (選択専用)", currency_list)
-        c_val = st.text_input("数量・金額", placeholder="100, 1万", key="cur_val")
-        if st.button("変換実行"):
+        c_from_raw = st.selectbox("変換元 (1単位/1g)", currency_list)
+        c_to_raw = st.selectbox("変換先", currency_list)
+        c_val_in = st.text_input("数量・金額", placeholder="100, 50万", key="cur_val")
+        
+        if st.button("レート変換を実行"):
+            # コードのみを抽出 (例: "XAU (金)" -> "XAU")
+            c_from = c_from_raw.split(' ')[0]
+            c_to = c_to_raw.split(' ')[0]
+            
             try:
-                rate = requests.get(f"https://open.er-api.com/v6/latest/{c_from.split(' ')[0]}").json()['rates'][c_to.split(' ')[0]]
-                if "XA" in c_from: rate /= 31.1035
-                st.success(f"結果: {format(parse_japanese_and_si(c_val) * rate, ',.2f')} {c_to}")
-            except: st.error("取得失敗")
-else:
-    st.info("モードを選択してください")
+                # 銅(COPPER)の特別対応
+                if c_from == "COPPER":
+                    rate = 1.35 if c_to == "JPY" else 0.009 # 概算
+                else:
+                    res = requests.get(f"https://open.er-api.com/v6/latest/{c_from}")
+                    data = res.json()
+                    if data["result"] == "success":
+                        rate = data['rates'][c_to]
+                        # 貴金属(1トロイオンス=31.1035g)を1gあたりに直す
+                        if c_from in ["XAU", "XAG"]: rate /= 31.1035
+                    else:
+                        st.error("APIエラーが発生しました。")
+                        rate = None
+
+                if rate:
+                    amount = parse_japanese_and_si(c_val_in)
+                    result = amount * rate
+                    st.success(f"【結果】 {format(result, ',.2f')} {c_to} (1単位: {format(rate, ',.4f')})")
+            except Exception as e:
+                st.error(f"接続失敗: インターネット環境を確認してください。")
+
+# --- 他のモード (略) ---
+elif st.session_state.mode_state == "拡縮":
+    units = ["Q","R","Y","Z","E","P","T","G","M","k","h","da","d","c","m","μ","n","p","f","a","z","y","r","q"]
+    uc = st.columns(6)
+    for i, u in enumerate(units):
+        if uc[i % 6].button(u): st.session_state.formula_state += u; st.rerun()
+elif st.session_state.mode_state == "値数":
+    stats = [("平均", "平均(["), ("中央値", "中央値(["), (",", ",")]
+    sc = st.columns(4)
+    for i, (l, c) in enumerate(stats):
+        if sc[i % 4].button(l): st.session_state.formula_state += c; st.rerun()
+elif st.session_state.mode_state == "科学計算":
+    sci = ["sin(", "cos(", "tan(", "log(", "abs(", "sqrt("]
+    sc = st.columns(4)
+    for i, s in enumerate(sci):
+        if sc[i % 4].button(s): st.session_state.formula_state += s; st.rerun()

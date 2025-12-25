@@ -41,8 +41,6 @@ st.markdown("""
         background-color: var(--btn-bg) !important; color: var(--btn-text) !important;
         font-weight: 900; font-size: 14px; border: 1px solid var(--text-display) !important;
     }
-    .del-btn div.stButton > button { background-color: #FF4B4B !important; color: white !important; border: none !important; }
-    .exe-btn div.stButton > button { background-color: #28a745 !important; color: white !important; border: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -63,16 +61,9 @@ def parse_japanese_and_si(text):
     if temp_s:
         try: total += float(temp_s)
         except: pass
-    if total == 0:
-        si = {'Q':1e30,'R':1e27,'Y':1e24,'Z':1e21,'E':1e18,'P':1e15,'T':1e12,'G':1e9,'M':1e6,'k':1e3,'h':1e2,'da':10,'d':0.1,'c':0.01,'m':0.001,'μ':1e-6,'n':1e-9,'p':1e-12,'f':1e-15,'a':1e-18,'z':1e-21,'y':1e-24,'r':1e-27,'q':1e-30}
-        for k, v in si.items():
-            if s.endswith(k):
-                try: return float(s[:-len(k)]) * v
-                except: pass
-        try: return float(s)
-        except: return 0.0
-    return total
+    return total if total != 0 else (float(s) if s.replace('.','').isdigit() else 0.0)
 
+# --- 相続税 ---
 def calculate_inheritance_tax_precise(total_assets, num_heirs):
     exemption = 30000000 + (6000000 * num_heirs)
     taxable_total = total_assets - exemption
@@ -99,98 +90,59 @@ if 'sub_mode' not in st.session_state: st.session_state.sub_mode = "税金"
 st.markdown('<div class="app-title">Python Calculator Premium</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="display-container">{st.session_state.formula_state if st.session_state.formula_state else "0"}</div>', unsafe_allow_html=True)
 
-# 電卓キー
+# 電卓
 keys = ["7","8","9","π","√","+","4","5","6","e","^^","−","1","2","3","i","(-)","×","0","00",".","(",")","÷"]
 cols = st.columns(6)
 for i, k in enumerate(keys):
     if cols[i % 6].button(k, key=f"k_{i}"): st.session_state.formula_state += k; st.rerun()
 
-c_main = st.columns(2)
-with c_main[0]:
-    st.markdown('<div class="del-btn">', unsafe_allow_html=True)
-    if st.button("delete", key="c_del"): st.session_state.formula_state = ""; st.rerun()
-with c_main[1]:
-    if st.button("＝", key="c_eq"):
-        val = parse_japanese_and_si(st.session_state.formula_state)
-        st.session_state.formula_state = format(val, '.10g'); st.rerun()
-
 st.divider()
 
-# モード切替
 modes = ["通常", "科学計算", "拡縮", "値数", "有料機能"]
 mc = st.columns(5)
 for i, m in enumerate(modes):
-    if mc[i].button(m, key=f"m_{i}"): st.session_state.mode_state = m; st.rerun()
+    if mc[i].button(m): st.session_state.mode_state = m; st.rerun()
 
 if st.session_state.mode_state == "有料機能":
     sc1, sc2 = st.columns(2)
-    if sc1.button("税金計算", key="go_tax"): st.session_state.sub_mode = "税金"; st.rerun()
-    if sc2.button("通貨・貴金属", key="go_conv"): st.session_state.sub_mode = "通貨"; st.rerun()
+    if sc1.button("税金計算"): st.session_state.sub_mode = "税金"; st.rerun()
+    if sc2.button("通貨・貴金属"): st.session_state.sub_mode = "通貨"; st.rerun()
 
     if st.session_state.sub_mode == "税金":
         t_type = st.selectbox("税金の種類", ["相続税", "所得税", "法人税", "住民税", "固定資産税", "贈与税", "税込10%", "税込8%"])
-        dep, heirs = 0, 1
-        if t_type == "所得税":
-            dep = st.selectbox("扶養人数", options=list(range(11)))
-        elif t_type == "相続税":
-            heirs = st.select_slider("法定相続人の数", options=list(range(1, 21)), value=1)
-        tax_in = st.text_input("金額入力", placeholder="例: 1億2000万, 500k")
-        st.markdown(f'<div class="tax-result-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)
-        if st.button("計算実行", key="tax_exe"):
+        heirs = st.select_slider("法定相続人の数", options=list(range(1, 21)), value=1) if t_type == "相続税" else 0
+        tax_in = st.text_input("金額入力", placeholder="例: 1.2億")
+        if st.button("計算実行"):
             base = parse_japanese_and_si(tax_in if tax_in else st.session_state.formula_state)
             if t_type == "相続税": r = calculate_inheritance_tax_precise(base, heirs)
             elif t_type == "固定資産税": r = base * 0.014
-            elif t_type == "住民税": r = base * 0.10
             elif t_type == "税込10%": r = base * 1.1
             else: r = base * 1.08
             st.session_state.tax_res = f"{t_type}: {format(r, ',.0f')} 円"; st.rerun()
+        st.markdown(f'<div class="tax-result-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)
 
     elif st.session_state.sub_mode == "通貨":
-        currency_list = ["JPY", "USD", "EUR", "GBP", "CNY", "AUD", "CAD", "CHF", "SGD", "HKD", "KRW", "THB", "TWD", "NZD", "INR", "XAU (金)", "XAG (銀)", "COPPER (銅)"]
-        c_from_raw = st.selectbox("変換元 (1単位/1g)", currency_list)
-        c_to_raw = st.selectbox("変換先", currency_list)
-        c_val_in = st.text_input("数量・金額", placeholder="100, 50万", key="cur_val")
+        c_list = ["JPY", "USD", "EUR", "GBP", "XAU (金)", "XAG (銀)"]
+        c_from_raw = st.selectbox("変換元", c_list)
+        c_to_raw = st.selectbox("変換先", c_list)
+        c_val = st.text_input("数量入力", value="1")
         
         if st.button("レート変換を実行"):
-            # コードのみを抽出 (例: "XAU (金)" -> "XAU")
-            c_from = c_from_raw.split(' ')[0]
-            c_to = c_to_raw.split(' ')[0]
-            
+            cf, ct = c_from_raw.split(' ')[0], c_to_raw.split(' ')[0]
+            rate = None
             try:
-                # 銅(COPPER)の特別対応
-                if c_from == "COPPER":
-                    rate = 1.35 if c_to == "JPY" else 0.009 # 概算
-                else:
-                    res = requests.get(f"https://open.er-api.com/v6/latest/{c_from}")
-                    data = res.json()
-                    if data["result"] == "success":
-                        rate = data['rates'][c_to]
-                        # 貴金属(1トロイオンス=31.1035g)を1gあたりに直す
-                        if c_from in ["XAU", "XAG"]: rate /= 31.1035
-                    else:
-                        st.error("APIエラーが発生しました。")
-                        rate = None
-
-                if rate:
-                    amount = parse_japanese_and_si(c_val_in)
-                    result = amount * rate
-                    st.success(f"【結果】 {format(result, ',.2f')} {c_to} (1単位: {format(rate, ',.4f')})")
-            except Exception as e:
-                st.error(f"接続失敗: インターネット環境を確認してください。")
-
-# --- 他のモード (略) ---
-elif st.session_state.mode_state == "拡縮":
-    units = ["Q","R","Y","Z","E","P","T","G","M","k","h","da","d","c","m","μ","n","p","f","a","z","y","r","q"]
-    uc = st.columns(6)
-    for i, u in enumerate(units):
-        if uc[i % 6].button(u): st.session_state.formula_state += u; st.rerun()
-elif st.session_state.mode_state == "値数":
-    stats = [("平均", "平均(["), ("中央値", "中央値(["), (",", ",")]
-    sc = st.columns(4)
-    for i, (l, c) in enumerate(stats):
-        if sc[i % 4].button(l): st.session_state.formula_state += c; st.rerun()
-elif st.session_state.mode_state == "科学計算":
-    sci = ["sin(", "cos(", "tan(", "log(", "abs(", "sqrt("]
-    sc = st.columns(4)
-    for i, s in enumerate(sci):
-        if sc[i % 4].button(s): st.session_state.formula_state += s; st.rerun()
+                # リアルタイム取得
+                res = requests.get(f"https://open.er-api.com/v6/latest/{cf}", timeout=5).json()
+                if res.get("result") == "success": rate = res['rates'][ct]
+            except:
+                # API失敗時の予備（2024年初頭の参考固定レート）
+                st.warning("リアルタイム通信に失敗しました。予備レートを使用します。")
+                fixed_rates = {"USDJPY": 150.0, "EURJPY": 160.0, "GBPJPY": 190.0}
+                if cf+ct in fixed_rates: rate = fixed_rates[cf+ct]
+                elif ct+cf in fixed_rates: rate = 1/fixed_rates[ct+cf]
+            
+            if rate:
+                if cf in ["XAU", "XAG"]: rate /= 31.1035 # 1g単価
+                res_val = parse_japanese_and_si(c_val) * rate
+                st.success(f"結果: {format(res_val, ',.2f')} {ct}")
+            else: st.error("現在レートを取得できません。")

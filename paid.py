@@ -40,8 +40,10 @@ st.markdown("""
     div.stButton > button {
         width: 100% !important; height: 50px !important; border-radius: 6px !important;
         background-color: var(--btn-bg) !important; color: var(--btn-text) !important;
-        font-weight: 900; font-size: 14px; border: 1px solid var(--text-display) !important;
+        font-weight: 900; font-size: 16px; border: 1px solid var(--text-display) !important;
     }
+    .del-btn div.stButton > button { background-color: #FF4B4B !important; color: white !important; border: none !important; height: 60px !important; font-size: 20px !important; }
+    .exe-btn div.stButton > button { background-color: #28a745 !important; color: white !important; border: none !important; height: 60px !important; font-size: 24px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -104,16 +106,19 @@ cols = st.columns(6)
 for i, k in enumerate(keys):
     if cols[i % 6].button(k): st.session_state.formula_state += k; st.rerun()
 
-c_main = st.columns(2)
-with c_main[0]:
-    if st.button("delete"): st.session_state.formula_state = ""; st.rerun()
-with c_main[1]:
-    if st.button("＝"):
-        try:
-            f = st.session_state.formula_state.replace('×','*').replace('÷','/').replace('−','-').replace('^^','**').replace('π', 'math.pi').replace('e', 'math.e').replace('√', 'math.sqrt')
-            st.session_state.formula_state = format(eval(f), '.10g')
-        except: st.session_state.formula_state = "Error"
-        st.rerun()
+# 削除ボタンとイコールボタンを横長に配置
+st.markdown('<div class="del-btn">', unsafe_allow_html=True)
+if st.button("DELETE"): st.session_state.formula_state = ""; st.rerun()
+st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown('<div class="exe-btn">', unsafe_allow_html=True)
+if st.button("＝"):
+    try:
+        f = st.session_state.formula_state.replace('×','*').replace('÷','/').replace('−','-').replace('^^','**').replace('π', 'math.pi').replace('e', 'math.e').replace('√', 'math.sqrt')
+        st.session_state.formula_state = format(eval(f), '.10g')
+    except: st.session_state.formula_state = "Error"
+    st.rerun()
+st.markdown('</div>', unsafe_allow_html=True)
 
 st.divider()
 
@@ -129,11 +134,11 @@ if st.session_state.mode_state == "有料機能":
     if sc2.button("通貨・貴金属"): st.session_state.sub_mode = "通貨"; st.rerun()
 
     if st.session_state.sub_mode == "税金":
-        t_type = st.selectbox("税金の種類 (選択専用)", ["相続税", "所得税", "法人税", "住民税", "固定資産税", "税込10%", "税込8%"])
+        t_type = st.selectbox("税金の種類", ["相続税", "所得税", "法人税", "住民税", "固定資産税", "税込10%", "税込8%"])
         heirs = st.select_slider("法定相続人の数", options=list(range(1, 21)), value=1) if t_type == "相続税" else 1
         tax_in = st.text_input("金額入力", placeholder="例: 5億, 1200万")
         st.markdown(f'<div class="tax-result-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)
-        if st.button("計算実行"):
+        if st.button("計算実行", key="tax_calc_btn"):
             base = parse_japanese_and_si(tax_in if tax_in else st.session_state.formula_state)
             if t_type == "相続税": r = calculate_inheritance_tax_precise(base, heirs)
             elif t_type == "固定資産税": r = base * 0.014
@@ -142,36 +147,19 @@ if st.session_state.mode_state == "有料機能":
             st.session_state.tax_res = f"{t_type}: {format(r, ',.0f')} 円"; st.rerun()
 
     elif st.session_state.sub_mode == "通貨":
-        # 銅(COPPER)を追加
         c_list = ["JPY", "USD", "EUR", "GBP", "CNY", "AUD", "XAU (金 1g)", "XAG (銀 1g)", "COPPER (銅 1kg)"]
         c_from = st.selectbox("変換元", c_list)
         c_to = st.selectbox("変換先", c_list)
         c_val = st.text_input("数量入力", value="1")
-        
-        if st.button("変換実行"):
-            f_code = c_from.split(' ')[0]
-            t_code = c_to.split(' ')[0]
-            
-            # APIベースレートの取得 (USD基準)
+        if st.button("変換実行", key="cur_calc_btn"):
+            f_code, t_code = c_from.split(' ')[0], c_to.split(' ')[0]
             try:
-                # どんなペアでも一度USD経由にすることで安定させる
-                base_url = f"https://open.er-api.com/v6/latest/USD"
-                rates = requests.get(base_url, timeout=3).json()['rates']
-                
-                # 貴金属のUSD価格 (2025年概算をベースに為替連動)
-                metal_usd = {"XAU": 2650.0/31.1035, "XAG": 31.0/31.1035, "COPPER": 9.2} # 1gまたは1kg
-                
-                # 変換元をUSDに直す
-                if f_code in metal_usd: val_in_usd = parse_japanese_and_si(c_val) * metal_usd[f_code]
-                else: val_in_usd = parse_japanese_and_si(c_val) / rates[f_code]
-                
-                # USDから変換先に直す
-                if t_code in metal_usd: result = val_in_usd / metal_usd[t_code]
-                else: result = val_in_usd * rates[t_code]
-                
-                st.success(f"結果: {format(result, ',.2f')} {t_code}")
-            except:
-                st.error("最新レートの取得に失敗しました。接続を確認してください。")
+                rates = requests.get("https://open.er-api.com/v6/latest/USD", timeout=3).json()['rates']
+                m_usd = {"XAU": 2650.0/31.1035, "XAG": 31.0/31.1035, "COPPER": 9.2}
+                v_usd = parse_japanese_and_si(c_val) * m_usd[f_code] if f_code in m_usd else parse_japanese_and_si(c_val) / rates[f_code]
+                res = v_usd / m_usd[t_code] if t_code in m_usd else v_usd * rates[t_code]
+                st.success(f"結果: {format(res, ',.2f')} {t_code}")
+            except: st.error("通信エラー")
 
 elif st.session_state.mode_state == "科学計算":
     sci_keys = ["sin(", "cos(", "tan(", "log(", "abs(", "sqrt(", "exp("]
@@ -180,10 +168,17 @@ elif st.session_state.mode_state == "科学計算":
         if sc[i % 4].button(s): st.session_state.formula_state += s; st.rerun()
 
 elif st.session_state.mode_state == "拡縮":
-    units = ["Q","R","Y","Z","E","P","T","G","M","k","h","da","d","c","m","μ","n","p","f","a","z","y","r","q"]
+    si_units = ["Q","R","Y","Z","E","P","T","G","M","k","h","da","d","c","m","μ","n","p","f","a","z","y","r","q"]
     uc = st.columns(6)
-    for i, u in enumerate(units):
-        if uc[i % 6].button(u): st.session_state.formula_state += u; st.rerun()
+    for i, u in enumerate(si_units):
+        if uc[i % 6].button(u):
+            # 連続入力を防止: 最後の文字がSI単位リストに含まれていない場合のみ追加
+            last_char = st.session_state.formula_state[-1] if st.session_state.formula_state else ""
+            if last_char not in si_units:
+                st.session_state.formula_state += u
+                st.rerun()
+            else:
+                st.toast("単位の連続入力はできません")
 
 elif st.session_state.mode_state == "値数":
     stats = [("平均", "mean(["), ("中央値", "median(["), ("標準偏差", "stdev(["), (",", ","), ("]", "]")]

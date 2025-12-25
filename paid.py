@@ -35,7 +35,42 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- ロジック ---
+# --- 単位解析ロジック ---
+def parse_japanese_and_si(text):
+    if not text: return 0.0
+    # カンマ削除
+    s = str(text).replace(',', '')
+    
+    # 日本語単位の変換
+    units = {"兆": 1e12, "億": 1e8, "万": 1e4, "千": 1e3}
+    for unit, val in units.items():
+        if unit in s:
+            parts = s.split(unit)
+            try:
+                # 「1億2000万」のような形式に対応
+                num_part = float(parts[0]) if parts[0] else 0.0
+                remaining = parse_japanese_and_si(parts[1]) if parts[1] else 0.0
+                return num_part * val + remaining
+            except: pass
+
+    # SI接頭語の変換
+    si = {'Q':1e30,'R':1e27,'Y':1e24,'Z':1e21,'E':1e18,'P':1e15,'T':1e12,'G':1e9,'M':1e6,'k':1e3,'h':1e2,'da':10,'d':0.1,'c':0.01,'m':0.001,'μ':1e-6,'n':1e-9,'p':1e-12,'f':1e-15,'a':1e-18,'z':1e-21,'y':1e-24,'r':1e-27,'q':1e-30}
+    for k, v in si.items():
+        if s.endswith(k):
+            try: return float(s[:-len(k)]) * v
+            except: pass
+            
+    # 数値のみの場合
+    try: return float(s)
+    except:
+        # 電卓の計算式として評価
+        try:
+            f = s.replace('×', '*').replace('÷', '/').replace('−', '-').replace('^^', '**')
+            safe_env = {k: getattr(math, k) for k in dir(math) if not k.startswith("_")}
+            return float(eval(f, {"__builtins__": None}, safe_env))
+        except: return 0.0
+
+# --- 税金ロジック ---
 def calculate_income_tax(income, dependents):
     taxable_income = income - 480000 - (dependents * 380000)
     if taxable_income <= 0: return 0
@@ -47,21 +82,13 @@ def calculate_income_tax(income, dependents):
     elif taxable_income <= 40000000: return taxable_income * 0.40 - 2796000
     else: return taxable_income * 0.45 - 4796000
 
+# --- 為替API ---
 def get_exchange_rate(base, target):
     try:
         url = f"https://open.er-api.com/v6/latest/{base}"
         data = requests.get(url).json()
         return data['rates'][target]
     except: return None
-
-def parse_val(formula):
-    if not formula: return 0.0
-    f = str(formula).replace('×', '*').replace('÷', '/').replace('−', '-').replace('^^', '**').replace(',', '')
-    try:
-        safe_env = {k: getattr(math, k) for k in dir(math) if not k.startswith("_")}
-        safe_env.update({"平均": statistics.mean, "中央値": statistics.median, "最頻値": statistics.mode})
-        return float(eval(f, {"__builtins__": None}, safe_env))
-    except: return 0.0
 
 # --- 状態管理 ---
 if 'formula_state' not in st.session_state: st.session_state.formula_state = ""
@@ -85,7 +112,8 @@ with c_main[0]:
     if st.button("delete", key="c_del"): st.session_state.formula_state = ""; st.rerun()
 with c_main[1]:
     if st.button("＝", key="c_eq"):
-        st.session_state.formula_state = format(parse_val(st.session_state.formula_state), '.10g'); st.rerun()
+        val = parse_japanese_and_si(st.session_state.formula_state)
+        st.session_state.formula_state = format(val, '.10g'); st.rerun()
 
 st.divider()
 
@@ -104,7 +132,7 @@ if st.session_state.mode_state == "有料機能":
     if st.session_state.sub_mode == "税金":
         dep = st.selectbox("扶養人数", options=list(range(11)))
         t_type = st.selectbox("種類", ["所得税", "法人税", "住民税", "贈与税", "税込10%", "税込8%"])
-        tax_in = st.text_input("金額入力", placeholder="課税対象額を入力", key="t_input")
+        tax_in = st.text_input("金額入力", placeholder="例: 500万, 1.2億, 10k (課税対象額)", key="t_input")
         
         # 結果表示エリア（ボタンの上）
         st.markdown(f'<div class="tax-result-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)
@@ -113,14 +141,18 @@ if st.session_state.mode_state == "有料機能":
         with tx_col1:
             st.markdown('<div class="exe-btn">', unsafe_allow_html=True)
             if st.button("計算実行", key="t_exe"):
-                base = parse_val(tax_in if tax_in else st.session_state.formula_state)
+                # 入力がない場合は電卓のディスプレイを使用
+                source = tax_in if tax_in else st.session_state.formula_state
+                base = parse_japanese_and_si(source)
+                
                 if t_type == "所得税": r = calculate_income_tax(base, dep)
                 elif t_type == "法人税": r = (base * 0.15) if base <= 8000000 else (1200000 + (base - 8000000) * 0.232)
                 elif t_type == "住民税": r = base * 0.10
-                elif t_type == "贈与税": r = (base - 1100000) * 0.1
+                elif t_type == "贈与税": r = max(0, (base - 1100000) * 0.1)
                 elif t_type == "税込10%": r = base * 1.1
                 elif t_type == "税込8%": r = base * 1.08
-                st.session_state.tax_res = f"{t_type}: {format(r, ',.0f')}"; st.rerun()
+                
+                st.session_state.tax_res = f"{t_type}: {format(r, ',.0f')} 円"; st.rerun()
         with tx_col2:
             st.markdown('<div class="del-btn">', unsafe_allow_html=True)
             if st.button("削除", key="t_del"): st.session_state.tax_res = "結果がここに表示されます"; st.rerun()
@@ -128,12 +160,12 @@ if st.session_state.mode_state == "有料機能":
     elif st.session_state.sub_mode == "通貨":
         c_from = st.selectbox("元通貨", ["JPY", "USD", "EUR", "GBP", "CNY"])
         c_to = st.selectbox("先通貨", ["USD", "JPY", "EUR", "GBP", "CNY"])
-        c_val = st.text_input("金額", placeholder="変換する金額を入力")
+        c_val = st.text_input("変換する金額を入力", placeholder="例: 1000, 10k")
         if st.button("変換実行"):
             rate = get_exchange_rate(c_from, c_to)
             if rate:
-                res = parse_val(c_val) * rate
-                st.success(f"{format(res, ',.2f')} {c_to} (Rate: {rate})")
+                res = parse_japanese_and_si(c_val) * rate
+                st.success(f"{format(res, ',.2f')} {c_to} (レート: {rate})")
             else: st.error("レート取得失敗")
 
 # --- 他モード ---

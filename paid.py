@@ -24,7 +24,7 @@ st.markdown("""
 <style>
     :root { --bg-page: #FFFFFF; --text-display: #000000; --btn-bg: #000000; --btn-text: #FFFFFF; }
     @media (prefers-color-scheme: dark) { :root { --bg-page: #000000; --text-display: #FFFFFF; --btn-bg: #FFFFFF; --btn-text: #000000; } }
-    .main .block-container { max-width: 95% !important; padding: 10px !important; }
+    .main .block-container { max-width: 98% !important; padding: 10px !important; }
     header {visibility: hidden;}
     .app-title { text-align: center; font-size: 26px; font-weight: 900; color: var(--text-display); border-bottom: 2px solid var(--text-display); margin-bottom: 10px; }
     .display-container {
@@ -45,10 +45,10 @@ st.markdown("""
         font-weight: 900; font-size: 16px; border: 1px solid var(--text-display) !important;
     }
     
-    /* DELETEとイコールの大型横並びスタイル */
-    .big-btn-container { display: flex; gap: 10px; margin-bottom: 10px; }
-    .del-btn-big div.stButton > button { background-color: #FF4B4B !important; color: white !important; border: none !important; height: 65px !important; font-size: 22px !important; }
-    .exe-btn-big div.stButton > button { background-color: #28a745 !important; color: white !important; border: none !important; height: 65px !important; font-size: 30px !important; }
+    /* DELETEとイコールの隙間を埋める設定 */
+    div[data-testid="stHorizontalBlock"] { gap: 0.5rem !important; }
+    .del-btn-big div.stButton > button { background-color: #FF4B4B !important; color: white !important; border: none !important; height: 70px !important; font-size: 22px !important; }
+    .exe-btn-big div.stButton > button { background-color: #28a745 !important; color: white !important; border: none !important; height: 70px !important; font-size: 32px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -111,7 +111,7 @@ cols = st.columns(6)
 for i, k in enumerate(keys):
     if cols[i % 6].button(k): st.session_state.formula_state += k; st.rerun()
 
-# DELETEと＝を同じ行で大きく表示
+# DELETEと＝を隙間なく大きく表示
 c_big = st.columns(2)
 with c_big[0]:
     st.markdown('<div class="del-btn-big">', unsafe_allow_html=True)
@@ -121,7 +121,7 @@ with c_big[1]:
     st.markdown('<div class="exe-btn-big">', unsafe_allow_html=True)
     if st.button("＝"):
         try:
-            f = st.session_state.formula_state.replace('×','*').replace('÷','/').replace('−','-').replace('^^','**').replace('π', 'math.pi').replace('e', 'math.e').replace('√', 'math.sqrt')
+            f = st.session_state.formula_state.replace('×','*').replace('÷','/').replace('−','-').replace('^^','**').replace('π', 'math.pi').replace('e', 'math.e').replace('√', 'math.sqrt').replace('mean', 'statistics.mean').replace('median', 'statistics.median').replace('mode', 'statistics.mode').replace('stdev', 'statistics.stdev')
             st.session_state.formula_state = format(eval(f), '.10g')
         except: st.session_state.formula_state = "Error"
         st.rerun()
@@ -129,7 +129,7 @@ with c_big[1]:
 
 st.divider()
 
-# モード切替 (5列)
+# モード切替
 modes = ["通常", "科学計算", "拡縮", "値数", "有料機能"]
 mc = st.columns(5)
 for i, m in enumerate(modes):
@@ -141,11 +141,11 @@ if st.session_state.mode_state == "有料機能":
     if sc2.button("通貨・貴金属"): st.session_state.sub_mode = "通貨"; st.rerun()
 
     if st.session_state.sub_mode == "税金":
-        t_type = st.selectbox("種類を選択", ["相続税", "所得税", "法人税", "住民税", "固定資産税", "税込10%", "税込8%"])
+        t_type = st.selectbox("種類", ["相続税", "所得税", "法人税", "住民税", "固定資産税", "税込10%", "税込8%"])
         heirs = st.select_slider("法定相続人の数", options=list(range(1, 21)), value=1) if t_type == "相続税" else 1
-        tax_in = st.text_input("金額(万/億 対応)", placeholder="例: 1.5億")
+        tax_in = st.text_input("金額(万/億 対応)")
         st.markdown(f'<div class="tax-result-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)
-        if st.button("計算実行", key="tax_btn"):
+        if st.button("計算実行", key="tax_exe"):
             base = parse_japanese_and_si(tax_in if tax_in else st.session_state.formula_state)
             if t_type == "相続税": r = calculate_inheritance_tax_precise(base, heirs)
             elif t_type == "固定資産税": r = base * 0.014
@@ -155,10 +155,9 @@ if st.session_state.mode_state == "有料機能":
 
     elif st.session_state.sub_mode == "通貨":
         c_list = ["JPY", "USD", "EUR", "GBP", "CNY", "AUD", "XAU (金 1g)", "XAG (銀 1g)", "COPPER (銅 1kg)"]
-        c_from = st.selectbox("変換元", c_list)
-        c_to = st.selectbox("変換先", c_list)
+        c_from, c_to = st.selectbox("変換元", c_list), st.selectbox("変換先", c_list)
         c_val = st.text_input("数量", value="1")
-        if st.button("変換実行", key="cur_btn"):
+        if st.button("変換実行"):
             f_code, t_code = c_from.split(' ')[0], c_to.split(' ')[0]
             try:
                 rates = requests.get("https://open.er-api.com/v6/latest/USD", timeout=3).json()['rates']
@@ -179,14 +178,12 @@ elif st.session_state.mode_state == "拡縮":
     uc = st.columns(6)
     for i, u in enumerate(si_units):
         if uc[i % 6].button(u):
-            # 連続入力をサイレントに防止
             last_char = st.session_state.formula_state[-1] if st.session_state.formula_state else ""
             if last_char not in si_units:
-                st.session_state.formula_state += u
-                st.rerun()
+                st.session_state.formula_state += u; st.rerun()
 
 elif st.session_state.mode_state == "値数":
-    stats = [("平均", "mean(["), ("中央値", "median(["), ("標準偏差", "stdev(["), (",", ","), ("]", "]")]
+    stats = [("平均", "mean(["), ("中央値", "median(["), ("最頻値", "mode(["), ("最大", "max(["), ("最小", "min(["), (",", ","), (")]", ")]")]
     sc = st.columns(4)
     for i, (l, c) in enumerate(stats):
         if sc[i % 4].button(l): st.session_state.formula_state += c; st.rerun()

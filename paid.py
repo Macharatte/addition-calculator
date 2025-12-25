@@ -37,6 +37,7 @@ st.markdown("""
 
 # --- 税金計算ロジック ---
 def calculate_income_tax(val):
+    """所得税の累進課税計算"""
     if val <= 0: return 0
     if val <= 1950000: return val * 0.05
     elif val <= 3300000: return val * 0.10 - 97500
@@ -47,6 +48,7 @@ def calculate_income_tax(val):
     else: return val * 0.45 - 4796000
 
 def calculate_gift_tax(val):
+    """贈与税（一般贈与財産）の計算"""
     v = val - 1100000
     if v <= 0: return 0
     if v <= 2000000: return v * 0.10
@@ -57,6 +59,15 @@ def calculate_gift_tax(val):
     elif v <= 15000000: return v * 0.45 - 1750000
     elif v <= 30000000: return v * 0.50 - 2500000
     else: return v * 0.55 - 4000000
+
+def calculate_corp_tax(val):
+    """法人税（2段階計算）の計算"""
+    if val <= 0: return 0
+    if val <= 8000000:
+        return val * 0.15
+    else:
+        # 800万円以下の部分は15%、それを超える部分は23.2%
+        return (8000000 * 0.15) + ((val - 8000000) * 0.232)
 
 # --- データ定義 ---
 CURRENCY_MAP = {
@@ -93,7 +104,7 @@ def parse_val(formula):
         return float(eval(f, {"__builtins__": None}, safe_env))
     except: return 0.0
 
-# --- アプリ状態 (ウィジェットキーと重複しない名前) ---
+# --- アプリ状態 ---
 if 'formula_state' not in st.session_state: st.session_state.formula_state = ""
 if 'mode_state' not in st.session_state: st.session_state.mode_state = "通常"
 if 'submode_state' not in st.session_state: st.session_state.submode_state = "なし"
@@ -140,13 +151,14 @@ if curr_m == "有料機能":
     if pc2.button("通貨変換モード", key="sub_conv"): st.session_state.submode_state = "通貨"; st.rerun()
 
     if st.session_state.submode_state == "税金":
-        taxes = [("税込10%", 1.1), ("税込8%", 1.08), ("所得税", "inc"), ("贈与税", "gift"), ("法人税", 0.232), ("住民税", 0.1)]
+        taxes = [("税込10%", 1.1), ("税込8%", 1.08), ("所得税", "inc"), ("贈与税", "gift"), ("法人税", "corp"), ("住民税", 0.1)]
         tc = st.columns(3)
         for i, (l, v) in enumerate(taxes):
             if tc[i % 3].button(l, key=f"tax_btn_{i}"):
                 base = parse_val(st.session_state.formula_state)
                 if l == "所得税": r = calculate_income_tax(base)
                 elif l == "贈与税": r = calculate_gift_tax(base)
+                elif l == "法人税": r = calculate_corp_tax(base)
                 else: r = base * v
                 st.session_state.formula_state = format(r, '.10g'); st.session_state.last_was_eq = True; st.rerun()
 
@@ -166,6 +178,7 @@ if curr_m == "有料機能":
         if st.session_state.conv_res_state: st.markdown(f'<div class="result-box">変換結果: {st.session_state.conv_res_state}</div>', unsafe_allow_html=True)
 
 else:
+    # 他のモードのボタン表示
     items = []
     if curr_m == "巨数": items = [x[0] for x in SI_PREFIXES]
     elif curr_m == "科学計算": items = ["sin(", "cos(", "tan(", "log(", "log10(", "exp(", "abs(", "sqrt(", "radians(", "degrees("]

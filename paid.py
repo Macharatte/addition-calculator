@@ -7,7 +7,7 @@ import re
 # --- ページ設定 ---
 st.set_page_config(page_title="Python Calculator Premium", layout="centered")
 
-# --- デザインCSS (黒を基調としたスタイル) ---
+# --- デザインCSS ---
 st.markdown("""
 <style>
     :root { --bg-page: #FFFFFF; --text-display: #000000; --btn-bg: #000000; --btn-text: #FFFFFF; --btn-border: #000000; }
@@ -28,15 +28,16 @@ st.markdown("""
         border: 2px solid var(--btn-border) !important; font-weight: 900;
     }
     .del-btn div.stButton > button { background-color: #FF4B4B !important; color: white !important; border-color: #FF4B4B !important; }
+    .eq-btn div.stButton > button { background-color: #000000 !important; color: white !important; }
+    @media (prefers-color-scheme: dark) { .eq-btn div.stButton > button { background-color: #FFFFFF !important; color: #000000 !important; } }
 </style>
 """, unsafe_allow_html=True)
 
 # --- 税金計算ロジック ---
 def calculate_income_tax(income, dependents):
-    # 1. 控除額の計算 (所得2400万以下の標準的な基礎控除48万円を適用)
+    # 所得 － 基礎控除(48万) － 扶養控除(38万×人数)
     taxable_income = income - 480000 - (dependents * 380000)
     if taxable_income <= 0: return 0
-    # 2. 累進課税と速算控除
     if taxable_income <= 1950000: return taxable_income * 0.05
     elif taxable_income <= 3300000: return taxable_income * 0.10 - 97500
     elif taxable_income <= 6950000: return taxable_income * 0.20 - 427500
@@ -90,12 +91,14 @@ for i, k in enumerate(keys_layout):
         if st.session_state.last_was_eq: st.session_state.formula_state = ""; st.session_state.last_was_eq = False
         st.session_state.formula_state += k; st.rerun()
 
+# delete と ＝ を横に並べる
 c1, c2 = st.columns(2)
 with c1:
     st.markdown('<div class="del-btn">', unsafe_allow_html=True)
     if st.button("delete", key="widget_del", use_container_width=True):
         st.session_state.formula_state = ""; st.rerun()
 with c2:
+    st.markdown('<div class="eq-btn">', unsafe_allow_html=True)
     if st.button("＝", key="widget_eq", use_container_width=True):
         st.session_state.formula_state = format(parse_val(st.session_state.formula_state), '.10g')
         st.session_state.last_was_eq = True; st.rerun()
@@ -121,9 +124,9 @@ if curr_m == "有料機能":
         dep_count = st.selectbox("人数に応じて所得税の控除額が変わります", options=list(range(11)), index=0, key="dep_select")
         
         st.divider()
-        # 全ての税金ボタンを復元
+        # 配置を元通りに復元、住民税の(10%)を削除
         taxes = [
-            ("所得税計算", "inc"), ("法人税", "corp"), ("住民税(10%)", 0.1),
+            ("所得税計算", "inc"), ("法人税", "corp"), ("住民税", 0.1),
             ("贈与税", "gift"), ("税込10%", 1.1), ("税込8%", 1.08)
         ]
         tc = st.columns(3)
@@ -133,15 +136,10 @@ if curr_m == "有料機能":
                 if val == "inc": r = calculate_income_tax(base, dep_count)
                 elif val == "corp": r = calculate_corp_tax(base)
                 elif val == "gift": r = calculate_gift_tax(base)
-                else: r = (base * val) if val > 1 else (base * val)
+                else: r = base * val
                 st.session_state.formula_state = format(r, '.10g'); st.session_state.last_was_eq = True; st.rerun()
 
-    if st.session_state.submode_state == "通貨":
-        st.write("リアルタイム為替変換")
-        # (通貨機能の詳細は以前のものを維持)
-
 else:
-    # 科学計算・巨数などのボタンを復元
     items = []
     if curr_m == "巨数": items = ["Q","R","Y","Z","E","P","T","G","M","k"]
     elif curr_m == "科学計算": items = ["sin(", "cos(", "tan(", "log(", "log10(", "abs(", "sqrt("]

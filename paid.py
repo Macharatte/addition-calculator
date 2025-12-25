@@ -19,35 +19,49 @@ st.components.v1.html("""
 </script>
 """, height=0)
 
-# --- 強力なCSSカスタマイズ ---
+# --- 究極のCSS（ボタン巨大化と隙間排除） ---
 st.markdown("""
 <style>
-    /* ページ全体の幅を最大化 */
     .main .block-container { max-width: 100% !important; padding: 10px !important; }
     header {visibility: hidden;}
     
-    .app-title { text-align: center; font-size: 26px; font-weight: 900; border-bottom: 2px solid; margin-bottom: 10px; }
+    /* ディスプレイ表示 */
     .display-container {
         display: flex; align-items: center; justify-content: flex-end;
         font-size: 38px; font-weight: 900; margin-bottom: 15px; padding: 15px; 
         border-bottom: 5px solid; min-height: 90px; word-break: break-all;
     }
     
-    /* ボタンの基本サイズ */
+    /* すべてのボタンの基本形 */
     div.stButton > button {
-        width: 100% !important; height: 55px !important; font-weight: 900 !important; font-size: 18px !important;
+        width: 100% !important;
+        height: 60px !important;
+        font-weight: 900 !important;
+        font-size: 18px !important;
+        margin-bottom: 2px !important;
     }
     
-    /* DELETEとイコールを横いっぱいに広げるための設定 */
-    div[data-testid="stHorizontalBlock"] { gap: 4px !important; }
-
-    /* DELETEボタン（赤） */
-    div.stButton > button[kind="secondary"]:first-child { 
-        background-color: #FF4B4B !important; color: white !important; height: 80px !important; font-size: 24px !important;
+    /* 横並びブロックの隙間を消す */
+    [data-testid="stHorizontalBlock"] {
+        gap: 2px !important;
     }
-    /* ＝ボタン（緑） */
-    .exe-btn div.stButton > button {
-        background-color: #28a745 !important; color: white !important; height: 80px !important; font-size: 40px !important;
+
+    /* DELETEボタン専用（赤・巨大） */
+    div[data-testid="column"]:nth-of-type(1) button {
+        background-color: #FF4B4B !important;
+        color: white !important;
+        height: 85px !important;
+        font-size: 26px !important;
+        border: none !important;
+    }
+
+    /* ＝ボタン専用（緑・巨大） */
+    div[data-testid="column"]:nth-of-type(2) button {
+        background-color: #28a745 !important;
+        color: white !important;
+        height: 85px !important;
+        font-size: 45px !important;
+        border: none !important;
     }
     
     .tax-result-box {
@@ -58,7 +72,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- ロジック関数 ---
+# --- 解析・計算ロジック ---
 def parse_val(text):
     if not text: return 0.0
     s = str(text).replace(',', '').strip()
@@ -74,10 +88,9 @@ def parse_val(text):
     if s:
         try: total += float(s)
         except: pass
-    return total if total != 0 else (float(text) if str(text).replace('.','').isdigit() else 0.0)
+    return total if total != 0 else (float(text) if str(text).replace('.','').replace('-','').isdigit() else 0.0)
 
 def calc_inheritance(assets, heirs):
-    # 相続税: 5億2人で1億5210万になるロジック
     exemption = 30000000 + (6000000 * heirs)
     taxable = assets - exemption
     if taxable <= 0: return 0
@@ -94,27 +107,26 @@ def calc_inheritance(assets, heirs):
     return get_step(share) * heirs
 
 def calc_gift(amt, is_special):
-    # 贈与税（110万控除後）
     target = amt - 1100000
     if target <= 0: return 0
     if is_special: # 特例贈与
-        if target <= 200万: r, d = 0.10, 0
-        elif target <= 400万: r, d = 0.15, 10万
-        elif target <= 600万: r, d = 0.20, 30万
-        elif target <= 1000万: r, d = 0.30, 90万
-        elif target <= 1500万: r, d = 0.40, 190万
-        elif target <= 3000万: r, d = 0.45, 265万
-        elif target <= 4500万: r, d = 0.50, 415万
-        else: r, d = 0.55, 640万
+        if target <= 2000000: r, d = 0.10, 0
+        elif target <= 4000000: r, d = 0.15, 100000
+        elif target <= 6000000: r, d = 0.20, 300000
+        elif target <= 10000000: r, d = 0.30, 900000
+        elif target <= 15000000: r, d = 0.40, 1900000
+        elif target <= 30000000: r, d = 0.45, 2650000
+        elif target <= 45000000: r, d = 0.50, 4150000
+        else: r, d = 0.55, 6400000
     else: # 一般贈与
-        if target <= 200万: r, d = 0.10, 0
-        elif target <= 300万: r, d = 0.15, 10万
-        elif target <= 400万: r, d = 0.20, 25万
-        elif target <= 600万: r, d = 0.30, 65万
-        elif target <= 1000万: r, d = 0.40, 125万
-        elif target <= 1500万: r, d = 0.45, 175万
-        elif target <= 3000万: r, d = 0.50, 250万
-        else: r, d = 0.55, 400万
+        if target <= 2000000: r, d = 0.10, 0
+        elif target <= 3000000: r, d = 0.15, 100000
+        elif target <= 4000000: r, d = 0.20, 250000
+        elif target <= 6000000: r, d = 0.30, 650000
+        elif target <= 10000000: r, d = 0.40, 1250000
+        elif target <= 15000000: r, d = 0.45, 1750000
+        elif target <= 30000000: r, d = 0.50, 2500000
+        else: r, d = 0.55, 4000000
     return target * r - d
 
 # --- 状態管理 ---
@@ -125,52 +137,51 @@ if 'm_state' not in st.session_state: st.session_state.m_state = "通常"
 # --- UI表示 ---
 st.markdown(f'<div class="display-container">{st.session_state.f_state if st.session_state.f_state else "0"}</div>', unsafe_allow_html=True)
 
-# 電卓
+# 電卓キー
 keys = ["7","8","9","π","√","+","4","5","6","e","^^","−","1","2","3","i","(-)","×","0","00",".","(",")","÷"]
 cols = st.columns(6)
 for i, k in enumerate(keys):
     if cols[i % 6].button(k): st.session_state.f_state += k; st.rerun()
 
-# DELETEと＝の横並び最大化
-c1, c2 = st.columns(2)
-with c1:
-    if st.button("DELETE", key="btn_del"): st.session_state.f_state = ""; st.rerun()
-with c2:
-    st.markdown('<div class="exe-btn">', unsafe_allow_html=True)
-    if st.button("＝", key="btn_exe"):
+# DELETEと＝の巨大ボタン
+c_exe = st.columns(2)
+with c_exe[0]:
+    if st.button("DELETE"): st.session_state.f_state = ""; st.rerun()
+with c_exe[1]:
+    if st.button("＝"):
         try:
             f = st.session_state.f_state.replace('×','*').replace('÷','/').replace('−','-').replace('^^','**').replace('π', 'math.pi').replace('e', 'math.e').replace('√', 'math.sqrt').replace('mean', 'statistics.mean').replace('median', 'statistics.median').replace('mode', 'statistics.mode').replace('stdev', 'statistics.stdev')
             st.session_state.f_state = format(eval(f), '.10g')
         except: st.session_state.f_state = "Error"
         st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
 
 st.divider()
 
 # モード切替
 mc = st.columns(5)
-for i, m in enumerate(["通常", "科学計算", "拡縮", "値数", "有料機能"]):
+modes = ["通常", "科学計算", "拡縮", "値数", "有料機能"]
+for i, m in enumerate(modes):
     if mc[i].button(m): st.session_state.m_state = m; st.rerun()
 
 if st.session_state.m_state == "有料機能":
-    t_type = st.selectbox("税種・機能", ["相続税", "贈与税(一般)", "贈与税(特例)", "固定資産税", "税込10%", "税込8%", "通貨・貴金属"])
+    t_type = st.selectbox("メニュー", ["相続税", "贈与税(一般)", "贈与税(特例)", "固定資産税", "税込10%", "税込8%", "通貨・貴金属"])
     
     if t_type == "通貨・貴金属":
         c_list = ["JPY", "USD", "EUR", "XAU (金1g)", "XAG (銀1g)", "COPPER (銅1kg)"]
-        c_f, c_t = st.selectbox("元", c_list), st.selectbox("先", c_list)
-        c_v = st.text_input("数量", value="1")
+        cf, ct = st.selectbox("元", c_list), st.selectbox("先", c_list)
+        cv = st.text_input("数量", value="1")
         if st.button("変換実行"):
             try:
                 r = requests.get("https://open.er-api.com/v6/latest/USD", timeout=3).json()['rates']
                 m_usd = {"XAU": 2650.0/31.1035, "XAG": 31.0/31.1035, "COPPER": 9.2}
-                v_u = parse_val(c_v) * m_usd[c_f.split(' ')[0]] if c_f.split(' ')[0] in m_usd else parse_val(c_v) / r[c_f.split(' ')[0]]
-                res = v_u / m_usd[c_t.split(' ')[0]] if c_t.split(' ')[0] in m_usd else v_u * r[c_t.split(' ')[0]]
-                st.success(f"{format(res, ',.2f')} {c_t.split(' ')[0]}")
+                v_u = parse_val(cv) * m_usd[cf.split(' ')[0]] if cf.split(' ')[0] in m_usd else parse_val(cv) / r[cf.split(' ')[0]]
+                res = v_u / m_usd[ct.split(' ')[0]] if ct.split(' ')[0] in m_usd else v_u * r[ct.split(' ')[0]]
+                st.success(f"{format(res, ',.2f')} {ct.split(' ')[0]}")
             except: st.error("通信失敗")
     else:
         heirs = st.select_slider("相続人数", options=list(range(1, 11))) if t_type == "相続税" else 1
-        tax_in = st.text_input("金額 (例: 5億, 2000万)")
-        if st.button("税金計算"):
+        tax_in = st.text_input("金額 (例: 5億)")
+        if st.button("計算実行"):
             v = parse_val(tax_in if tax_in else st.session_state.f_state)
             if t_type == "相続税": res = calc_inheritance(v, heirs)
             elif "贈与税" in t_type: res = calc_gift(v, "特例" in t_type)

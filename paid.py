@@ -42,8 +42,6 @@ st.markdown("""
         background-color: var(--btn-bg) !important; color: var(--btn-text) !important;
         font-weight: 900; font-size: 14px; border: 1px solid var(--text-display) !important;
     }
-    .del-btn div.stButton > button { background-color: #FF4B4B !important; color: white !important; border: none !important; }
-    .exe-btn div.stButton > button { background-color: #28a745 !important; color: white !important; border: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -108,7 +106,6 @@ for i, k in enumerate(keys):
 
 c_main = st.columns(2)
 with c_main[0]:
-    st.markdown('<div class="del-btn">', unsafe_allow_html=True)
     if st.button("delete"): st.session_state.formula_state = ""; st.rerun()
 with c_main[1]:
     if st.button("＝"):
@@ -126,7 +123,6 @@ mc = st.columns(5)
 for i, m in enumerate(modes):
     if mc[i].button(m): st.session_state.mode_state = m; st.rerun()
 
-# 各モードの機能表示
 if st.session_state.mode_state == "有料機能":
     sc1, sc2 = st.columns(2)
     if sc1.button("税金計算"): st.session_state.sub_mode = "税金"; st.rerun()
@@ -137,7 +133,7 @@ if st.session_state.mode_state == "有料機能":
         heirs = st.select_slider("法定相続人の数", options=list(range(1, 21)), value=1) if t_type == "相続税" else 1
         tax_in = st.text_input("金額入力", placeholder="例: 5億, 1200万")
         st.markdown(f'<div class="tax-result-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)
-        if st.button("計算実行", key="tax_exe"):
+        if st.button("計算実行"):
             base = parse_japanese_and_si(tax_in if tax_in else st.session_state.formula_state)
             if t_type == "相続税": r = calculate_inheritance_tax_precise(base, heirs)
             elif t_type == "固定資産税": r = base * 0.014
@@ -146,28 +142,39 @@ if st.session_state.mode_state == "有料機能":
             st.session_state.tax_res = f"{t_type}: {format(r, ',.0f')} 円"; st.rerun()
 
     elif st.session_state.sub_mode == "通貨":
-        c_list = ["JPY", "USD", "EUR", "GBP", "CNY", "AUD", "XAU (金)", "XAG (銀)"]
+        # 銅(COPPER)を追加
+        c_list = ["JPY", "USD", "EUR", "GBP", "CNY", "AUD", "XAU (金 1g)", "XAG (銀 1g)", "COPPER (銅 1kg)"]
         c_from = st.selectbox("変換元", c_list)
         c_to = st.selectbox("変換先", c_list)
-        c_val = st.text_input("数量", value="1")
+        c_val = st.text_input("数量入力", value="1")
+        
         if st.button("変換実行"):
-            f_code, t_code = c_from.split(' ')[0], c_to.split(' ')[0]
-            rate = None
+            f_code = c_from.split(' ')[0]
+            t_code = c_to.split(' ')[0]
+            
+            # APIベースレートの取得 (USD基準)
             try:
-                res = requests.get(f"https://open.er-api.com/v6/latest/{f_code}", timeout=3).json()
-                if res.get("result") == "success": rate = res['rates'][t_code]
+                # どんなペアでも一度USD経由にすることで安定させる
+                base_url = f"https://open.er-api.com/v6/latest/USD"
+                rates = requests.get(base_url, timeout=3).json()['rates']
+                
+                # 貴金属のUSD価格 (2025年概算をベースに為替連動)
+                metal_usd = {"XAU": 2650.0/31.1035, "XAG": 31.0/31.1035, "COPPER": 9.2} # 1gまたは1kg
+                
+                # 変換元をUSDに直す
+                if f_code in metal_usd: val_in_usd = parse_japanese_and_si(c_val) * metal_usd[f_code]
+                else: val_in_usd = parse_japanese_and_si(c_val) / rates[f_code]
+                
+                # USDから変換先に直す
+                if t_code in metal_usd: result = val_in_usd / metal_usd[t_code]
+                else: result = val_in_usd * rates[t_code]
+                
+                st.success(f"結果: {format(result, ',.2f')} {t_code}")
             except:
-                # 2025年参考バックアップレート
-                backup = {"USDJPY":155.0, "EURJPY":165.0, "GBPJPY":195.0, "XAUJPY":13500.0}
-                rate = backup.get(f_code+t_code, 1.0)
-                st.warning("通信エラーのため予備レートを使用しました")
-            if rate:
-                if f_code in ["XAU", "XAG"]: rate /= 31.1035
-                res_v = parse_japanese_and_si(c_val) * rate
-                st.success(f"結果: {format(res_v, ',.2f')} {t_code}")
+                st.error("最新レートの取得に失敗しました。接続を確認してください。")
 
 elif st.session_state.mode_state == "科学計算":
-    sci_keys = ["sin(", "cos(", "tan(", "log(", "log10(", "abs(", "sqrt(", "exp("]
+    sci_keys = ["sin(", "cos(", "tan(", "log(", "abs(", "sqrt(", "exp("]
     sc = st.columns(4)
     for i, s in enumerate(sci_keys):
         if sc[i % 4].button(s): st.session_state.formula_state += s; st.rerun()
@@ -179,7 +186,7 @@ elif st.session_state.mode_state == "拡縮":
         if uc[i % 6].button(u): st.session_state.formula_state += u; st.rerun()
 
 elif st.session_state.mode_state == "値数":
-    stats = [("平均", "mean(["), ("中央値", "median(["), ("標準偏差", "stdev(["), ("最大", "max(["), ("最小", "min(["), (",", ","), ("]", "]")]
+    stats = [("平均", "mean(["), ("中央値", "median(["), ("標準偏差", "stdev(["), (",", ","), ("]", "]")]
     sc = st.columns(4)
     for i, (l, c) in enumerate(stats):
         if sc[i % 4].button(l): st.session_state.formula_state += c; st.rerun()

@@ -62,37 +62,21 @@ def parse_japanese_and_si(text):
         except: return 0.0
     return total
 
-# --- 相続税計算ロジック（画像データに基づく修正） ---
+# --- 相続税計算ロジック（国税庁方式） ---
 def calculate_inheritance_tax_precise(total_assets, num_heirs):
-    # 1. 基礎控除の計算（3000万 + 600万 × 人数）
-    # これにより、人数が1人増えるごとに課税対象が600万円減ります
     exemption = 30000000 + (6000000 * num_heirs)
     taxable_total = total_assets - exemption
     if taxable_total <= 0: return 0
-    
-    # 2. 法定相続分で分割したと仮定（人数で均等配分）
     amount_per_heir = taxable_total / num_heirs
-    
-    # 3. 画像の速算表に基づく税率・控除額の適用
     def get_tax_step(amt):
-        if amt <= 10000000:
-            return amt * 0.10
-        elif amt <= 30000000:
-            return amt * 0.15 - 500000
-        elif amt <= 50000000:
-            return amt * 0.20 - 2000000
-        elif amt <= 100000000:
-            return amt * 0.30 - 7000000
-        elif amt <= 200000000:
-            return amt * 0.40 - 17000000
-        elif amt <= 300000000:
-            return amt * 0.45 - 27000000
-        elif amt <= 600000000:
-            return amt * 0.50 - 42000000
-        else:
-            return amt * 0.55 - 72000000
-
-    # 各人の仮の税額を合計して相続税の総額を出す
+        if amt <= 10000000: return amt * 0.10
+        elif amt <= 30000000: return amt * 0.15 - 500000
+        elif amt <= 50000000: return amt * 0.20 - 2000000
+        elif amt <= 100000000: return amt * 0.30 - 7000000
+        elif amt <= 200000000: return amt * 0.40 - 17000000
+        elif amt <= 300000000: return amt * 0.45 - 27000000
+        elif amt <= 600000000: return amt * 0.50 - 42000000
+        else: return amt * 0.55 - 72000000
     return get_tax_step(amount_per_heir) * num_heirs
 
 # --- 状態管理 ---
@@ -122,7 +106,7 @@ with c_main[1]:
 
 st.divider()
 
-# モード
+# モード選択
 modes = ["通常", "科学計算", "拡縮", "値数", "有料機能"]
 mc = st.columns(5)
 for i, m in enumerate(modes):
@@ -134,14 +118,19 @@ if st.session_state.mode_state == "有料機能":
     if sc2.button("通貨・貴金属", key="go_conv"): st.session_state.sub_mode = "通貨"; st.rerun()
 
     if st.session_state.sub_mode == "税金":
-        t_type = st.selectbox("種類", ["相続税", "所得税", "法人税", "住民税", "固定資産税", "贈与税", "税込10%", "税込8%"])
+        # 1. 種類を選択 (選択式)
+        t_type = st.selectbox("税金の種類を選択", ["相続税", "所得税", "法人税", "住民税", "固定資産税", "贈与税", "税込10%", "税込8%"])
+        
+        # 2. 人数を設定 (キーボードを使わない選択式)
         dep, heirs = 0, 1
         if t_type == "所得税":
-            dep = st.number_input("扶養人数", min_value=0, value=0)
+            dep = st.selectbox("扶養人数を選択", options=list(range(11)), index=0)
         elif t_type == "相続税":
-            heirs = st.number_input("法定相続人の数 (1人増えるごとに非課税枠+600万)", min_value=1, value=1)
+            heirs = st.select_slider("法定相続人の数を選択 (非課税枠に影響)", options=list(range(1, 21)), value=1)
             
-        tax_in = st.text_input("金額入力", placeholder="例: 1億2000万, 8000k", key="t_input")
+        # 3. 金額入力
+        tax_in = st.text_input("課税対象額を入力", placeholder="例: 5億, 1200万, 80k", key="t_input")
+        
         st.markdown(f'<div class="tax-result-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)
         
         tx_col1, tx_col2 = st.columns(2)
@@ -149,11 +138,13 @@ if st.session_state.mode_state == "有料機能":
             st.markdown('<div class="exe-btn">', unsafe_allow_html=True)
             if st.button("計算実行"):
                 base = parse_japanese_and_si(tax_in if tax_in else st.session_state.formula_state)
-                if t_type == "相続税": 
-                    r = calculate_inheritance_tax_precise(base, heirs)
+                if t_type == "相続税": r = calculate_inheritance_tax_precise(base, heirs)
                 elif t_type == "固定資産税": r = base * 0.014
                 elif t_type == "住民税": r = base * 0.10
                 elif t_type == "税込10%": r = base * 1.1
+                elif t_type == "所得税":
+                    ti = base - 480000 - (dep * 380000)
+                    r = max(0, ti * 0.1) # 簡易
                 else: r = base * 1.08
                 st.session_state.tax_res = f"{t_type}: {format(r, ',.0f')} 円"; st.rerun()
         with tx_col2:
@@ -161,9 +152,11 @@ if st.session_state.mode_state == "有料機能":
             if st.button("削除"): st.session_state.tax_res = "結果がここに表示されます"; st.rerun()
 
     elif st.session_state.sub_mode == "通貨":
+        # 通貨の選択もマウスで完結
         currency_list = ["JPY", "USD", "EUR", "GBP", "CNY", "AUD", "CAD", "CHF", "SGD", "HKD", "KRW", "THB", "TWD", "NZD", "INR", "XAU (金)", "XAG (銀)", "COPPER (銅)"]
-        c_from = st.selectbox("変換元", currency_list); c_to = st.selectbox("変換先", currency_list)
-        c_val = st.text_input("数量入力", placeholder="100, 1.5M")
+        c_from = st.selectbox("変換元の通貨/金属", currency_list)
+        c_to = st.selectbox("変換先の通貨/金属", currency_list)
+        c_val = st.text_input("数量を入力", placeholder="100, 1万")
         if st.button("変換実行"):
             try:
                 rate = requests.get(f"https://open.er-api.com/v6/latest/{c_from.split(' ')[0]}").json()['rates'][c_to.split(' ')[0]]
@@ -171,6 +164,7 @@ if st.session_state.mode_state == "有料機能":
                 st.success(f"結果: {format(parse_japanese_and_si(c_val) * rate, ',.2f')} {c_to}")
             except: st.error("取得失敗")
 
+# --- 他のモード ---
 elif st.session_state.mode_state == "拡縮":
     units = ["Q","R","Y","Z","E","P","T","G","M","k","h","da","d","c","m","μ","n","p","f","a","z","y","r","q"]
     uc = st.columns(6)

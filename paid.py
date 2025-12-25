@@ -7,7 +7,7 @@ import re
 # --- ページ設定 ---
 st.set_page_config(page_title="Python Calculator Premium", layout="centered")
 
-# --- デザインCSS (ズレ防止・黒基調) ---
+# --- デザインCSS ---
 st.markdown("""
 <style>
     :root { --bg-page: #FFFFFF; --text-display: #000000; --btn-bg: #000000; --btn-text: #FFFFFF; --btn-border: #000000; }
@@ -21,12 +21,11 @@ st.markdown("""
         border-bottom: 5px solid var(--text-display); min-height: 100px; color: var(--text-display); word-break: break-all;
     }
     div.stButton > button {
-        width: 100% !important; height: 60px !important; border-radius: 8px !important;
+        width: 100% !important; height: 50px !important; border-radius: 8px !important;
         background-color: var(--btn-bg) !important; color: var(--btn-text) !important;
-        border: 2px solid var(--btn-border) !important; font-weight: 900;
+        border: 2px solid var(--btn-border) !important; font-weight: 900; font-size: 14px;
     }
     .del-btn div.stButton > button { background-color: #FF4B4B !important; color: white !important; border-color: #FF4B4B !important; }
-    .eq-btn div.stButton > button { background-color: var(--btn-bg) !important; color: var(--btn-text) !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -63,12 +62,22 @@ def calculate_gift_tax(val):
 def parse_val(formula):
     if not formula or formula == "Error": return 0.0
     f = str(formula).replace('×', '*').replace('÷', '/').replace('−', '-').replace('^^', '**')
-    si = {'Q':1e30, 'R':1e27, 'Y':1e24, 'Z':1e21, 'E':1e18, 'P':1e15, 'T':1e12, 'G':1e9, 'M':1e6, 'k':1e3}
-    for k, v in si.items():
+    # SI単位（巨数〜微数）の定義
+    si_units = {
+        'Q': 1e30, 'R': 1e27, 'Y': 1e24, 'Z': 1e21, 'E': 1e18, 'P': 1e15, 'T': 1e12, 'G': 1e9, 'M': 1e6, 'k': 1e3,
+        'h': 1e2, 'da': 10, 'd': 0.1, 'c': 0.01, 'm': 0.001, 'μ': 1e-6, 'n': 1e-9, 'p': 1e-12, 'f': 1e-15, 'a': 1e-18,
+        'z': 1e-21, 'y': 1e-24, 'r': 1e-27, 'q': 1e-30
+    }
+    for k, v in si_units.items():
         if k in f: f = re.sub(f'(\\d+){k}', f'(\\1*{v})', f)
     try:
         safe_env = {k: getattr(math, k) for k in dir(math) if not k.startswith("_")}
-        safe_env.update({"abs": abs, "mean": statistics.mean, "median": statistics.median, "mode": statistics.mode})
+        safe_env.update({
+            "abs": abs, "平均": statistics.mean, "中央値": statistics.median, 
+            "最頻値": statistics.mode, "標準偏差": statistics.stdev, "最大値": max, "最小値": min
+        })
+        # 日本語表記を関数名に置換
+        f = f.replace("平均", "平均").replace("中央値", "中央値").replace("最頻値", "最頻値")
         return float(eval(f, {"__builtins__": None}, safe_env))
     except: return 0.0
 
@@ -90,14 +99,12 @@ for i, k in enumerate(keys_layout):
         if st.session_state.last_was_eq: st.session_state.formula_state = ""; st.session_state.last_was_eq = False
         st.session_state.formula_state += k; st.rerun()
 
-# ＝ と delete の横並び配置
 c1, c2 = st.columns(2)
 with c1:
     st.markdown('<div class="del-btn">', unsafe_allow_html=True)
     if st.button("delete", key="main_del", use_container_width=True):
         st.session_state.formula_state = ""; st.rerun()
 with c2:
-    st.markdown('<div class="eq-btn">', unsafe_allow_html=True)
     if st.button("＝", key="main_eq", use_container_width=True):
         st.session_state.formula_state = format(parse_val(st.session_state.formula_state), '.10g')
         st.session_state.last_was_eq = True; st.rerun()
@@ -105,7 +112,7 @@ with c2:
 st.divider()
 
 # --- モード選択 ---
-modes = ["通常", "科学計算", "巨数", "値数", "有料機能"]
+modes = ["通常", "科学計算", "単位", "値数", "有料機能"]
 mc = st.columns(5)
 for i, m in enumerate(modes):
     if mc[i].button(m, key=f"mode_{i}"): 
@@ -122,7 +129,6 @@ if curr_m == "有料機能":
         st.markdown("#### 扶養人数選択")
         dep_count = st.selectbox("扶養人数選択 (38万円/人 控除)", options=list(range(11)), index=0)
         input_val = st.text_input("所得・数値を直接入力 (空欄なら電卓の値を使用)", key="tax_field")
-        
         st.divider()
         taxes = [("所得税計算", "inc"), ("法人税", "corp"), ("住民税", "res"), ("贈与税", "gift"), ("税込10%", 1.1), ("税込8%", 1.08)]
         tc = st.columns(3)
@@ -137,23 +143,25 @@ if curr_m == "有料機能":
                 else: r = base * val
                 st.session_state.formula_state = format(r, '.10g'); st.session_state.last_was_eq = True; st.rerun()
 
-elif curr_m == "巨数":
-    units = ["Q","R","Y","Z","E","P","T","G","M","k"]
-    ec = st.columns(5)
+elif curr_m == "単位":
+    # 巨数〜微数まで24種類を表示
+    units = ["Q","R","Y","Z","E","P","T","G","M","k","h","da","d","c","m","μ","n","p","f","a","z","y","r","q"]
+    ec = st.columns(6)
     for i, u in enumerate(units):
-        if ec[i % 5].button(u, key=f"giant_{i}"):
+        if ec[i % 6].button(u, key=f"unit_{i}"):
             st.session_state.formula_state += u; st.rerun()
+
+elif curr_m == "値数":
+    # 日本語化した統計ボタン
+    stats = [("平均([", "平均(["), ("中央値([", "中央値(["), ("最頻値([", "最頻値(["), ("標偏差([", "標準偏差(["), ("最大([", "最大値(["), ("最小([", "最小値(["), ("])", "])"), (",", ",")]
+    ec = st.columns(4)
+    for i, (label, cmd) in enumerate(stats):
+        if ec[i % 4].button(label, key=f"stat_{i}"):
+            st.session_state.formula_state += cmd; st.rerun()
 
 elif curr_m == "科学計算":
     sci = ["sin(", "cos(", "tan(", "log(", "log10(", "abs(", "sqrt("]
     ec = st.columns(4)
     for i, s in enumerate(sci):
         if ec[i % 4].button(s, key=f"sci_{i}"):
-            st.session_state.formula_state += s; st.rerun()
-
-elif curr_m == "値数":
-    stats = ["mean([", "median([", "mode([", "stdev([", "max([", "min([", "])", ","]
-    ec = st.columns(4)
-    for i, s in enumerate(stats):
-        if ec[i % 4].button(s, key=f"stat_{i}"):
             st.session_state.formula_state += s; st.rerun()

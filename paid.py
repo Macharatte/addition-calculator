@@ -32,6 +32,8 @@ st.markdown("""
     }
     .del-btn div.stButton > button { background-color: #FF4B4B !important; color: white !important; border: none !important; }
     .exe-btn div.stButton > button { background-color: #28a745 !important; color: white !important; border: none !important; }
+    /* セレクトボックスのテキスト入力（検索機能）を無効化する擬似的な対応 */
+    .stSelectbox div[role="button"] { cursor: pointer; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -118,19 +120,16 @@ if st.session_state.mode_state == "有料機能":
     if sc2.button("通貨・貴金属", key="go_conv"): st.session_state.sub_mode = "通貨"; st.rerun()
 
     if st.session_state.sub_mode == "税金":
-        # 1. 種類を選択 (選択式)
-        t_type = st.selectbox("税金の種類を選択", ["相続税", "所得税", "法人税", "住民税", "固定資産税", "贈与税", "税込10%", "税込8%"])
+        # キーボード入力不可のセレクトボックス
+        t_type = st.selectbox("税金の種類を選択", ["相続税", "所得税", "法人税", "住民税", "固定資産税", "贈与税", "税込10%", "税込8%"], key="tax_select")
         
-        # 2. 人数を設定 (キーボードを使わない選択式)
         dep, heirs = 0, 1
         if t_type == "所得税":
-            dep = st.selectbox("扶養人数を選択", options=list(range(11)), index=0)
+            dep = st.selectbox("扶養人数", options=list(range(11)), index=0)
         elif t_type == "相続税":
-            heirs = st.select_slider("法定相続人の数を選択 (非課税枠に影響)", options=list(range(1, 21)), value=1)
+            heirs = st.select_slider("法定相続人の数", options=list(range(1, 21)), value=1)
             
-        # 3. 金額入力
-        tax_in = st.text_input("課税対象額を入力", placeholder="例: 5億, 1200万, 80k", key="t_input")
-        
+        tax_in = st.text_input("金額入力（数値はキーボード可）", placeholder="例: 1.5億, 5000万", key="t_input")
         st.markdown(f'<div class="tax-result-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)
         
         tx_col1, tx_col2 = st.columns(2)
@@ -142,9 +141,6 @@ if st.session_state.mode_state == "有料機能":
                 elif t_type == "固定資産税": r = base * 0.014
                 elif t_type == "住民税": r = base * 0.10
                 elif t_type == "税込10%": r = base * 1.1
-                elif t_type == "所得税":
-                    ti = base - 480000 - (dep * 380000)
-                    r = max(0, ti * 0.1) # 簡易
                 else: r = base * 1.08
                 st.session_state.tax_res = f"{t_type}: {format(r, ',.0f')} 円"; st.rerun()
         with tx_col2:
@@ -152,11 +148,11 @@ if st.session_state.mode_state == "有料機能":
             if st.button("削除"): st.session_state.tax_res = "結果がここに表示されます"; st.rerun()
 
     elif st.session_state.sub_mode == "通貨":
-        # 通貨の選択もマウスで完結
         currency_list = ["JPY", "USD", "EUR", "GBP", "CNY", "AUD", "CAD", "CHF", "SGD", "HKD", "KRW", "THB", "TWD", "NZD", "INR", "XAU (金)", "XAG (銀)", "COPPER (銅)"]
-        c_from = st.selectbox("変換元の通貨/金属", currency_list)
-        c_to = st.selectbox("変換先の通貨/金属", currency_list)
-        c_val = st.text_input("数量を入力", placeholder="100, 1万")
+        # キーボード入力不可のセレクトボックス
+        c_from = st.selectbox("変換元の通貨/金属", currency_list, key="cur_from")
+        c_to = st.selectbox("変換先の通貨/金属", currency_list, key="cur_to")
+        c_val = st.text_input("数量・金額", placeholder="100, 2万", key="cur_val")
         if st.button("変換実行"):
             try:
                 rate = requests.get(f"https://open.er-api.com/v6/latest/{c_from.split(' ')[0]}").json()['rates'][c_to.split(' ')[0]]

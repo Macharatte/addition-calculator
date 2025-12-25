@@ -1,11 +1,24 @@
 import streamlit as st
 import math
-import statistics
-import re
 import requests
+import streamlit.components.v1 as components
 
 # --- ページ設定 ---
 st.set_page_config(page_title="Python Calculator Premium", layout="centered")
+
+# --- キーボード強制無効化スクリプト ---
+# セレクトボックス内の入力フィールドをreadonly（読み取り専用）にしてキーボードを阻止
+st.components.v1.html("""
+<script>
+    const observer = new MutationObserver(() => {
+        const inputs = window.parent.document.querySelectorAll('input[role="combobox"]');
+        inputs.forEach(input => {
+            input.setAttribute('readonly', 'true');
+        });
+    });
+    observer.observe(window.parent.document.body, { childList: true, subtree: true });
+</script>
+""", height=0)
 
 # --- デザインCSS ---
 st.markdown("""
@@ -32,8 +45,6 @@ st.markdown("""
     }
     .del-btn div.stButton > button { background-color: #FF4B4B !important; color: white !important; border: none !important; }
     .exe-btn div.stButton > button { background-color: #28a745 !important; color: white !important; border: none !important; }
-    /* セレクトボックスのテキスト入力（検索機能）を無効化する擬似的な対応 */
-    .stSelectbox div[role="button"] { cursor: pointer; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -64,7 +75,6 @@ def parse_japanese_and_si(text):
         except: return 0.0
     return total
 
-# --- 相続税計算ロジック（国税庁方式） ---
 def calculate_inheritance_tax_precise(total_assets, num_heirs):
     exemption = 30000000 + (6000000 * num_heirs)
     taxable_total = total_assets - exemption
@@ -120,8 +130,7 @@ if st.session_state.mode_state == "有料機能":
     if sc2.button("通貨・貴金属", key="go_conv"): st.session_state.sub_mode = "通貨"; st.rerun()
 
     if st.session_state.sub_mode == "税金":
-        # キーボード入力不可のセレクトボックス
-        t_type = st.selectbox("税金の種類を選択", ["相続税", "所得税", "法人税", "住民税", "固定資産税", "贈与税", "税込10%", "税込8%"], key="tax_select")
+        t_type = st.selectbox("税金の種類を選択 (選択専用)", ["相続税", "所得税", "法人税", "住民税", "固定資産税", "贈与税", "税込10%", "税込8%"])
         
         dep, heirs = 0, 1
         if t_type == "所得税":
@@ -129,7 +138,7 @@ if st.session_state.mode_state == "有料機能":
         elif t_type == "相続税":
             heirs = st.select_slider("法定相続人の数", options=list(range(1, 21)), value=1)
             
-        tax_in = st.text_input("金額入力（数値はキーボード可）", placeholder="例: 1.5億, 5000万", key="t_input")
+        tax_in = st.text_input("金額入力", placeholder="例: 5億, 1200万", key="t_input")
         st.markdown(f'<div class="tax-result-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)
         
         tx_col1, tx_col2 = st.columns(2)
@@ -149,32 +158,14 @@ if st.session_state.mode_state == "有料機能":
 
     elif st.session_state.sub_mode == "通貨":
         currency_list = ["JPY", "USD", "EUR", "GBP", "CNY", "AUD", "CAD", "CHF", "SGD", "HKD", "KRW", "THB", "TWD", "NZD", "INR", "XAU (金)", "XAG (銀)", "COPPER (銅)"]
-        # キーボード入力不可のセレクトボックス
-        c_from = st.selectbox("変換元の通貨/金属", currency_list, key="cur_from")
-        c_to = st.selectbox("変換先の通貨/金属", currency_list, key="cur_to")
-        c_val = st.text_input("数量・金額", placeholder="100, 2万", key="cur_val")
+        c_from = st.selectbox("変換元 (選択専用)", currency_list)
+        c_to = st.selectbox("変換先 (選択専用)", currency_list)
+        c_val = st.text_input("数量・金額", placeholder="100, 1万", key="cur_val")
         if st.button("変換実行"):
             try:
                 rate = requests.get(f"https://open.er-api.com/v6/latest/{c_from.split(' ')[0]}").json()['rates'][c_to.split(' ')[0]]
                 if "XA" in c_from: rate /= 31.1035
                 st.success(f"結果: {format(parse_japanese_and_si(c_val) * rate, ',.2f')} {c_to}")
             except: st.error("取得失敗")
-
-# --- 他のモード ---
-elif st.session_state.mode_state == "拡縮":
-    units = ["Q","R","Y","Z","E","P","T","G","M","k","h","da","d","c","m","μ","n","p","f","a","z","y","r","q"]
-    uc = st.columns(6)
-    for i, u in enumerate(units):
-        if uc[i % 6].button(u, key=f"u_{i}"): st.session_state.formula_state += u; st.rerun()
-
-elif st.session_state.mode_state == "値数":
-    stats = [("平均", "平均(["), ("中央値", "中央値(["), ("最頻値", "最頻値(["), ("標偏差", "標準偏差(["), ("最大", "最大値(["), ("最小", "最小値(["), ("])", "])"), (",", ",")]
-    sc = st.columns(4)
-    for i, (l, c) in enumerate(stats):
-        if sc[i % 4].button(l, key=f"st_{i}"): st.session_state.formula_state += c; st.rerun()
-
-elif st.session_state.mode_state == "科学計算":
-    sci = ["sin(", "cos(", "tan(", "log(", "log10(", "abs(", "sqrt("]
-    sc = st.columns(4)
-    for i, s in enumerate(sci):
-        if sc[i % 4].button(s, key=f"sc_{i}"): st.session_state.formula_state += s; st.rerun()
+else:
+    st.info("モードを選択してください")

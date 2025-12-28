@@ -46,7 +46,7 @@ st.markdown("""
     [data-testid="stHorizontalBlock"] .stButton {
                                         gap: 0px !important;
                                         column-gap: 0px !important;
-                                        low-gap: 0px !important;
+                                        row-gap: 0px !important;
                                       }
     
     button[key="btn_del_main"] { 

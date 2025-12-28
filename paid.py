@@ -43,7 +43,7 @@ st.markdown("""
     }
 
     /* 隙間抹殺 */
-    [data-testid="stHorizontalBlock"] { gap: 0px !important; }　{ column-gap:　0px ; }
+    [data-testid="stHorizontalBlock"] { gap: 0px !important; }　column-gap: 0px;
     
     button[key="btn_del_main"] { 
         background-color: #FF3B30 !important; color: white !important; 

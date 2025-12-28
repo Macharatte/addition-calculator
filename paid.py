@@ -97,7 +97,7 @@ L = LANG[st.session_state.lang]
 # --- 1. 左上言語選択とタイトル ---
 col_lang, col_empty = st.columns([1, 4])
 with col_lang:
-    st.session_state.lang = st.selectbox("", ["JP", "EN"], label_visibility="collapsed")
+    st.session_state.lang = st.selectbox("", ["JP", "EN", "ZH", "HI", "ES", "AR", "FR", "RU", "PT"], label_visibility="collapsed")
 
 st.markdown(f'<div class="app-title-box">{L["title"]}</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="display">{st.session_state.f_state if st.session_state.f_state else "0"}</div>', unsafe_allow_html=True)

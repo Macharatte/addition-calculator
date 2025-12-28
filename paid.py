@@ -43,11 +43,9 @@ st.markdown("""
     }
 
     /* 隙間抹殺 */
-    [data-testid="stHorizontalBlock"] .stButton {
-                                        gap: 0px !important;
-                                        column-gap: 0px !important;
-                                        row-gap: 0px !important;
-                                      }
+   [data-testid="stHorizontalBlock"] .stButton {　gap: 0px !important;　}
+   [data-testid="stHorizontalBlock"] .stButton { margin: 0px !important }
+    
     
     button[key="btn_del_main"] { 
         background-color: #FF3B30 !important; color: white !important; 

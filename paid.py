@@ -2,6 +2,7 @@ import streamlit as st
 import math
 import statistics
 import requests
+import re
 
 # --- 1. ページ設定 ---
 st.set_page_config(page_title="Python Calculator Premium", layout="centered")
@@ -11,8 +12,8 @@ st.components.v1.html("<script>const observer = new MutationObserver(() => { con
 
 # --- 3. 全言語リソース ---
 LANG = {
-    "JP": {"title": "Python Calculator Premium", "modes": ["通常", "科学計算", "値数", "拡縮", "有料機能"], "tax_m": "税金計算", "cur_m": "為替・貴金属", "exec": "実行", "amt": "金額/数量"},
-    "EN": {"title": "Python Calculator Premium", "modes": ["Basic", "Scientific", "Stats", "SI Prefix", "Paid"], "tax_m": "Tax", "cur_m": "Currency", "exec": "Run", "amt": "Amount/Qty"},
+    "JP": {"title": "Python Calculator Premium", "modes": ["通常", "科学計算", "値数", "拡縮", "有料機能"], "tax_m": "税金メニュー", "cur_m": "為替・貴金属", "exec": "計算実行", "amt": "金額入力"},
+    "EN": {"title": "Python Calculator Premium", "modes": ["Basic", "Scientific", "Stats", "SI Prefix", "Paid"], "tax_m": "Tax Menu", "cur_m": "Currency/Gold", "exec": "Calculate", "amt": "Amount"},
     "ZH": {"title": "Python 计算器", "modes": ["普通", "科学", "统计", "单位", "付费"], "tax_m": "税务", "cur_m": "汇率", "exec": "计算", "amt": "金额"},
     "HI": {"title": "पायथन कैलकुलेटर", "modes": ["सामान्य", "वैज्ञानिक", "आंकड़े", "उपसर्ग", "भुगतान"], "tax_m": "कर", "cur_m": "मुद्रा", "exec": "गणना", "amt": "राशि"},
     "ES": {"title": "Calculadora Python", "modes": ["Básico", "Científico", "Estadística", "Prefijos", "Pago"], "tax_m": "Impuestos", "cur_m": "Moneda", "exec": "Calcular", "amt": "Monto"},
@@ -22,7 +23,7 @@ LANG = {
     "PT": {"title": "Calculadora Python", "modes": ["Básico", "Científico", "Estatística", "Prefixos", "Pago"], "tax_m": "Impostos", "cur_m": "Moeda", "exec": "Calcular", "amt": "Quantia"}
 }
 
-# --- 4. CSS (デザイン維持) ---
+# --- 4. CSS ---
 st.markdown("""
 <style>
     .main .block-container { max-width: 100% !important; padding: 10px !important; }
@@ -50,6 +51,9 @@ if 'm_idx' not in st.session_state: st.session_state.m_idx = 0
 if 'lang' not in st.session_state: st.session_state.lang = "JP"
 if 'p_sub' not in st.session_state: st.session_state.p_sub = "tax"
 if 'tax_res' not in st.session_state: st.session_state.tax_res = "0"
+
+# SI接頭語変換マップ
+SI_MAP = {'Q':1e30,'R':1e27,'Y':1e24,'Z':1e21,'E':1e18,'P':1e15,'T':1e12,'G':1e9,'M':1e6,'k':1e3,'h':1e2,'da':10,'d':0.1,'c':0.01,'m':0.001,'μ':1e-6,'n':1e-9,'p':1e-12,'f':1e-15,'a':1e-18,'z':1e-21,'y':1e-24,'r':1e-27,'q':1e-30}
 
 # --- 6. 言語選択 ---
 col_l, _ = st.columns([1, 4])
@@ -79,8 +83,13 @@ with c1:
 with c2:
     if st.button("＝", key="btn_exe_main"):
         try:
-            raw = st.session_state.f_state.replace('×','*').replace('÷','/').replace('−','-').replace('^^','**').replace('π','math.pi').replace('e','math.e').replace('√','math.sqrt')
-            st.session_state.f_state = format(eval(raw, {"math": math, "statistics": statistics}), '.10g')
+            expr = st.session_state.f_state.replace('×','*').replace('÷','/').replace('−','-').replace('^^','**').replace('π','math.pi').replace('e','math.e').replace('√','math.sqrt')
+            # SI接頭語を数値に置換
+            for char, val in SI_MAP.items():
+                if char in expr:
+                    expr = re.sub(f'(?<=\\d){char}', f'*{val}', expr)
+                    expr = re.sub(f'^{char}', f'{val}', expr)
+            st.session_state.f_state = format(eval(expr, {"math": math, "statistics": statistics}), '.10g')
         except: st.session_state.f_state = "Error"
         st.rerun()
 
@@ -93,7 +102,7 @@ for i, m_name in enumerate(L["modes"]):
         st.session_state.m_idx = i
         st.rerun()
 
-# --- 10. 【重要】各モードのボタンとロジックを強制描画 ---
+# --- 10. 機能ロジック ---
 cur_idx = st.session_state.m_idx
 
 if cur_idx == 1: # 科学計算
@@ -123,27 +132,34 @@ elif cur_idx == 4: # 有料機能
     if p_col[1].button(L["cur_m"], key="go_cur"): st.session_state.p_sub = "cur"; st.rerun()
     
     if st.session_state.p_sub == "tax":
-        t_sel = st.selectbox("Menu", ["Income Tax", "Inheritance Tax", "VAT 10%", "VAT 8%"])
+        # 豊富な選択肢を復活
+        t_sel = st.selectbox("Tax Type", ["所得税 (Income Tax)", "相続税 (Inheritance)", "法人税 (Corporate)", "贈与税 (Gift)", "税込10% (VAT 10%)", "税込8% (VAT 8%)", "税抜計算 (Excl. Tax)"])
         t_in = st.text_input(L["amt"], key="tax_input_val")
         if st.button(L["exec"], key="tax_calc_btn"):
             try:
                 v = float(t_in) if t_in else 0.0
-                rate = 1.1 if "10%" in t_sel else 1.08 if "8%" in t_sel else 0.2
-                st.session_state.tax_res = f"Result: {format(int(v * rate), ',')}"
+                if "10%" in t_sel: r = v * 1.1
+                elif "8%" in t_sel: r = v * 1.08
+                elif "税抜" in t_sel: r = v / 1.1
+                else: r = v * 0.2 # 簡易計算
+                st.session_state.tax_res = f"Result: {format(int(r), ',')}"
             except: st.session_state.tax_res = "Error"
             st.rerun()
         st.markdown(f'<div class="tax-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)
     
     elif st.session_state.p_sub == "cur":
-        c_list = ["JPY", "USD", "EUR", "XAU"]
+        # 通貨・貴金属の選択肢を復活
+        c_list = ["JPY (日本円)", "USD (米ドル)", "EUR (ユーロ)", "GBP (ポンド)", "CNY (元)", "XAU (金)", "XAG (銀)", "XPT (プラチナ)"]
         c_f = st.selectbox("From", c_list)
         c_t = st.selectbox("To", c_list)
         c_in = st.text_input(L["amt"], key="cur_input_val")
         if st.button(L["exec"], key="cur_calc_btn"):
             try:
-                rates = {"JPY": 150.0, "USD": 1.0, "EUR": 0.92, "XAU": 0.0004}
-                v_usd = float(c_in) / rates[c_f]
-                st.session_state.tax_res = f"Result: {format(v_usd * rates[c_t], '.4f')} {c_t}"
+                # レート（固定サンプル/API連携可能）
+                rates = {"JPY": 150.0, "USD": 1.0, "EUR": 0.92, "GBP": 0.79, "CNY": 7.19, "XAU": 0.00045, "XAG": 0.042, "XPT": 0.011}
+                v_usd = float(c_in) / rates[c_f.split()[0]]
+                res = v_usd * rates[c_t.split()[0]]
+                st.session_state.tax_res = f"Result: {format(res, '.4f')} {c_t.split()[0]}"
             except: st.session_state.tax_res = "Error"
             st.rerun()
         st.markdown(f'<div class="tax-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)

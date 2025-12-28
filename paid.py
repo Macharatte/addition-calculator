@@ -43,7 +43,7 @@ st.markdown("""
     }
 
     /* 隙間抹殺 */
-   [data-testid="stHorizontalBlock"] .stButton {　gap: 0px !important;　}
+   [data-testid="stHorizontalBlock"] {　gap: 0px !important;　}
    [data-testid="stHorizontalBlock"] .stButton { margin: 0px !important }
     
     

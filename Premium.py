@@ -5,10 +5,10 @@ import urllib.request
 import json
 import datetime
 
-# --- 1. ページ設定 ---
-st.set_page_config(page_title="Global Professional Calc 2025", layout="centered")
+# --- 1. ページ基本設定 ---
+st.set_page_config(page_title="Global SI-Master Calc 2025", layout="centered")
 
-# --- 2. 状態管理 ---
+# --- 2. 状態管理の初期化 ---
 if 'display' not in st.session_state:
     st.session_state.display = ""
 if 'rates' not in st.session_state:
@@ -18,130 +18,130 @@ if 'theme' not in st.session_state:
 if 'lang' not in st.session_state:
     st.session_state.lang = "日本語"
 
-# --- 3. 言語辞書 (10言語) ---
+# --- 3. 10言語辞書定義 ---
 LANG_DICT = {
-    "日本語": {"update": "レート更新", "theme": "テーマ切替", "clear": "クリア", "exe": "計算実行", "sci": "科学計算", "stat": "統計", "si": "接頭語", "paid": "有料機能", "fuel": "燃料価格", "cur": "為替換算", "cry": "仮想通貨"},
-    "English": {"update": "Update Rates", "theme": "Switch Theme", "clear": "CLEAR", "exe": "EXECUTE", "sci": "SCIENTIFIC", "stat": "STATISTICS", "si": "SI UNITS", "paid": "PAID", "fuel": "FUEL", "cur": "CURRENCY", "cry": "CRYPTO"},
-    "中文": {"update": "更新汇率", "theme": "切换主题", "clear": "清除", "exe": "计算", "sci": "科学计算", "stat": "统计", "si": "单位", "paid": "付费功能", "fuel": "燃料", "cur": "货币", "cry": "加密货币"},
-    "한국어": {"update": "환율 업데이트", "theme": "테마 변경", "clear": "삭제", "exe": "계산", "sci": "과학 계산", "stat": "통계", "si": "접두어", "paid": "유료 기능", "fuel": "연료", "cur": "환율", "cry": "가상화폐"},
-    "Español": {"update": "Actualizar", "theme": "Cambiar Tema", "clear": "BORRAR", "exe": "EJECUTAR", "sci": "CIENTÍFICA", "stat": "ESTADÍSTICA", "si": "SI", "paid": "PAGO", "fuel": "COMBUSTIBLE", "cur": "MONEDA", "cry": "CRIPTO"},
-    "Français": {"update": "Actualiser", "theme": "Thème", "clear": "EFFACER", "exe": "CALCULER", "sci": "SCIENTIFIQUE", "stat": "STATISTIQUES", "si": "SI", "paid": "PAYANT", "fuel": "CARBURANT", "cur": "DEVISE", "cry": "CRYPTO"},
-    "Deutsch": {"update": "Aktualisieren", "theme": "Design", "clear": "LÖSCHEN", "exe": "BERECHNEN", "sci": "WISSENSCHAFT", "stat": "STATISTIK", "si": "SI", "paid": "PRO", "fuel": "KRAFTSTOFF", "cur": "WÄHRUNG", "cry": "CRYPTO"},
-    "Русский": {"update": "Обновить", "theme": "Тема", "clear": "СБРОС", "exe": "ИТОГ", "sci": "НАУЧНЫЙ", "stat": "СТАТИСТИКА", "si": "СИ", "paid": "ПЛАТНО", "fuel": "ТОПЛИВО", "cur": "VALUTA", "cry": "КРИПТО"},
-    "Português": {"update": "Atualizar", "theme": "Tema", "clear": "LIMPAR", "exe": "EXECUTAR", "sci": "CIENTÍFICA", "stat": "ESTATÍSTICA", "si": "SI", "paid": "PAGO", "fuel": "COMBUSTÍVEL", "cur": "MOEDA", "cry": "CRIPTO"},
-    "Italiano": {"update": "Aggiorna", "theme": "Tema", "clear": "CANCELLA", "exe": "ESEGUI", "sci": "SCIENTIFICA", "stat": "STATISTICA", "si": "SI", "paid": "PAGAMENTO", "fuel": "CARBURANTE", "cur": "VALUTA", "cry": "CRIPTO"}
+    "日本語": {"upd": "レート更新", "thm": "表示切替", "clr": "消去", "exe": "計算実行", "sci": "科学", "stat": "統計", "si": "接頭語", "paid": "有料", "fuel": "燃料", "cur": "為替", "cry": "仮想通貨"},
+    "English": {"upd": "Update", "thm": "Theme", "clr": "CLR", "exe": "EXEC", "sci": "SCI", "stat": "STAT", "si": "SI", "paid": "PAID", "fuel": "Fuel", "cur": "Forex", "cry": "Crypto"},
+    "中文": {"upd": "更新汇率", "thm": "切换主题", "clear": "清除", "exe": "计算", "sci": "科学", "stat": "统计", "si": "单位", "paid": "付费", "fuel": "燃料", "cur": "货币", "cry": "加密货币"},
+    "한국어": {"upd": "환율 갱신", "thm": "테마 변경", "clr": "삭제", "exe": "실행", "sci": "과학", "stat": "통계", "si": "접두어", "paid": "유료", "fuel": "연료", "cur": "환율", "cry": "코인"},
+    "Español": {"upd": "Actualizar", "thm": "Tema", "clr": "BORRAR", "exe": "EJECUTAR", "sci": "SCI", "stat": "ESTAD", "si": "SI", "paid": "PAGO", "fuel": "Gas", "cur": "Moneda", "cry": "Cripto"},
+    "Français": {"upd": "Actualiser", "thm": "Thème", "clr": "EFFACER", "exe": "EXEC", "sci": "SCI", "stat": "STAT", "si": "SI", "paid": "PAGO", "fuel": "Carburant", "cur": "Devise", "cry": "Crypto"},
+    "Deutsch": {"upd": "Update", "thm": "Design", "clr": "LÖSCHEN", "exe": "BERECHNEN", "sci": "SCI", "stat": "STAT", "si": "SI", "paid": "PRO", "fuel": "Sprit", "cur": "Währung", "cry": "Krypto"},
+    "Русский": {"upd": "Обновить", "thm": "Тема", "clr": "СБРОС", "exe": "ИТОГ", "sci": "НАУЧ", "stat": "СТАТ", "si": "СИ", "paid": "ПЛАТНО", "fuel": "Топливо", "cur": "Валюта", "cry": "Крипто"},
+    "Português": {"upd": "Atualizar", "thm": "Tema", "clr": "LIMPAR", "exe": "EXEC", "sci": "SCI", "stat": "ESTAD", "si": "SI", "paid": "PAGO", "fuel": "Gás", "cur": "Moeda", "cry": "Cripto"},
+    "Italiano": {"upd": "Aggiorna", "thm": "Tema", "clr": "CANCELLA", "exe": "ESEGUI", "sci": "SCI", "stat": "STAT", "si": "SI", "paid": "PRO", "fuel": "Benzina", "cur": "Valuta", "cry": "Cripto"}
 }
 
-# --- 4. SI接頭語辞書 (Qからqまで) ---
+# --- 4. SI接頭語定義 (Q ~ q 全20種) ---
 SI_MAP = {
     'Q': '*1e30', 'R': '*1e27', 'Y': '*1e24', 'Z': '*1e21', 'E': '*1e18', 'P': '*1e15', 'T': '*1e12', 'G': '*1e9', 'M': '*1e6', 'k': '*1e3',
     'm': '*1e-3', 'μ': '*1e-6', 'n': '*1e-9', 'p': '*1e-12', 'f': '*1e-15', 'a': '*1e-18', 'z': '*1e-21', 'y': '*1e-24', 'r': '*1e-27', 'q': '*1e-30'
 }
 
-# --- 5. デザイン (CSS) ---
+# --- 5. デザイン設定 ---
 is_dark = st.session_state.theme == "Dark"
-bg, txt, dbg = ("#121212", "#FFFFFF", "#252525") if is_dark else ("#F5F5F5", "#000000", "#FFFFFF")
-border_color = "#444444" if is_dark else "#CCCCCC"
+bg, txt, dbg = ("#0F0F0F", "#FFFFFF", "#1E1E1E") if is_dark else ("#FFFFFF", "#000000", "#F0F2F6")
+border = "#444444" if is_dark else "#CCCCCC"
 
 st.markdown(f"""
 <style>
     .stApp {{ background-color: {bg}; color: {txt}; }}
-    .calc-display {{
-        background-color: {dbg}; color: {txt};
-        padding: 20px; border: 2px solid {txt}; border-radius: 4px;
-        font-size: 36px; font-weight: 700; text-align: right;
-        min-height: 80px; margin-bottom: 20px; font-family: monospace;
+    .display-box {{
+        background-color: {dbg}; color: {txt}; padding: 25px; border: 2px solid {txt};
+        border-radius: 8px; font-size: 40px; text-align: right; font-family: 'Courier New', monospace;
     }}
-    div.stButton > button {{
-        width: 100% !important; height: 45px !important;
-        font-weight: 700 !important; background-color: {dbg} !important; color: {txt} !important;
-        border: 1px solid {border_color} !important; border-radius: 2px !important;
-    }}
-    .input-group {{ border: 1px solid {border_color}; padding: 15px; border-radius: 4px; background-color: {dbg}; }}
+    div.stButton > button {{ width: 100%; height: 48px; font-weight: bold; border: 1px solid {border}; }}
+    .frame-box {{ border: 1px solid {border}; padding: 15px; border-radius: 8px; background: {dbg}; margin-top: 10px; }}
 </style>
 """, unsafe_allow_html=True)
 
-# --- 6. UIコンポーネント ---
-L = LANG_DICT[st.session_state.lang]
+# --- 6. トップナビゲーション ---
+L = LANG_DICT.get(st.session_state.lang, LANG_DICT["English"])
 
-col_lang, col_upd, col_thm = st.columns([1, 1, 1])
-with col_lang:
-    st.session_state.lang = st.selectbox("LANGUAGE", list(LANG_DICT.keys()), label_visibility="collapsed")
-with col_upd:
-    if st.button(L["update"]): 
+c_lang, c_upd, c_thm = st.columns([1, 1, 1])
+with c_lang:
+    # 言語変更時に即座に再描画
+    new_lang = st.selectbox("LANG", list(LANG_DICT.keys()), index=list(LANG_DICT.keys()).index(st.session_state.lang), label_visibility="collapsed")
+    if new_lang != st.session_state.lang:
+        st.session_state.lang = new_lang
+        st.rerun()
+with c_upd:
+    if st.button(L["upd"]):
         try:
-            with urllib.request.urlopen("https://open.er-api.com/v6/latest/USD") as response:
-                st.session_state.rates["USD"] = json.loads(response.read())["rates"]["JPY"]
-            st.toast("UPDATED")
-        except: st.error("ERROR")
-with col_thm:
-    if st.button(L["theme"]):
-        st.session_state.theme = "Light" if is_dark else "Dark"; st.rerun()
+            with urllib.request.urlopen("https://open.er-api.com/v6/latest/USD") as r:
+                st.session_state.rates["USD"] = json.loads(r.read())["rates"]["JPY"]
+            st.toast("Updated")
+        except: st.error("Error")
+with c_thm:
+    if st.button(L["thm"]):
+        st.session_state.theme = "Light" if is_dark else "Dark"
+        st.rerun()
 
-st.markdown(f'<div class="calc-display">{st.session_state.display if st.session_state.display else "0"}</div>', unsafe_allow_html=True)
+# --- 7. ディスプレイ ---
+st.markdown(f'<div class="display-box">{st.session_state.display if st.session_state.display else "0"}</div>', unsafe_allow_html=True)
 
-# --- 7. キーパッド ---
-rows = [["7","8","9","÷"],["4","5","6","×"],["1","2","3","−"],["0",".","π","+"]]
-op_map = {"÷": "/", "×": "*", "−": "-"}
-for row in rows:
+# --- 8. 基本キーパッド ---
+keys = [["7","8","9","÷"],["4","5","6","×"],["1","2","3","−"],["0",".","π","+"]]
+ops = {"÷": "/", "×": "*", "−": "-"}
+for row in keys:
     cols = st.columns(4)
-    for i, label in enumerate(row):
-        if cols[i].button(label):
-            st.session_state.display += op_map.get(label, label); st.rerun()
+    for i, k in enumerate(row):
+        if cols[i].button(k):
+            st.session_state.display += ops.get(k, k); st.rerun()
 
-c1, c2 = st.columns(2)
-if c1.button(L["clear"]): st.session_state.display = ""; st.rerun()
-if c2.button(L["exe"]):
+b_clr, b_exe = st.columns(2)
+if b_clr.button(L["clr"]): st.session_state.display = ""; st.rerun()
+if b_exe.button(L["exe"]):
     try:
-        calc_str = st.session_state.display
-        for k, v in SI_MAP.items(): calc_str = calc_str.replace(k, v)
-        st.session_state.display = format(eval(calc_str, {"math": math, "statistics": statistics}), '.10g')
-    except: st.session_state.display = "ERROR"
+        expr = st.session_state.display
+        for k, v in SI_MAP.items(): expr = expr.replace(k, v)
+        st.session_state.display = str(eval(expr, {"math": math, "statistics": statistics}))
+    except: st.session_state.display = "Error"
     st.rerun()
 
 st.divider()
 
-# --- 8. 機能タブ ---
-t1, t2, t3, t4 = st.tabs([L["sci"], L["stat"], L["si"], L["paid"]])
+# --- 9. 機能切り替えエリア ---
+tabs = st.tabs([L["sci"], L["stat"], L["si"], L["paid"]])
 
-with t1:
-    s_map = {"sin":"math.sin(", "cos":"math.cos(", "tan":"math.tan(", "sqrt":"math.sqrt(", "log":"math.log10(", "abs":"abs(", "^":"**"}
-    cols = st.columns(4)
-    for i, (k, v) in enumerate(s_map.items()):
-        if cols[i % 4].button(k): st.session_state.display += v; st.rerun()
+with tabs[0]: # 科学計算
+    sc = st.columns(4)
+    s_f = {"sin":"math.sin(", "cos":"math.cos(", "tan":"math.tan(", "√":"math.sqrt(", "log":"math.log10(", "exp":"math.exp(", "abs":"abs(", "(":"("}
+    for i, (k, v) in enumerate(s_f.items()):
+        if sc[i%4].button(k): st.session_state.display += v; st.rerun()
+    if st.button(" ) "): st.session_state.display += ")"; st.rerun()
 
-with t2:
-    cols = st.columns(3)
-    if cols[0].button("MEAN"): st.session_state.display += "statistics.mean(["; st.rerun()
-    if cols[1].button("MEDIAN"): st.session_state.display += "statistics.median(["; st.rerun()
-    if cols[2].button("SUM"): st.session_state.display += "sum(["; st.rerun()
-    if st.button("CLOSE ARRAY ( ]) )"): st.session_state.display += "])"; st.rerun()
+with tabs[1]: # 統計
+    st_c = st.columns(3)
+    if st_c[0].button("MEAN"): st.session_state.display += "statistics.mean(["; st.rerun()
+    if st_c[1].button("MEDIAN"): st.session_state.display += "statistics.median(["; st.rerun()
+    if st_c[2].button("SUM"): st.session_state.display += "sum(["; st.rerun()
+    if st.button("CLOSE ])"): st.session_state.display += "])"; st.rerun()
 
-with t3:
-    # Qからqまでの全接頭語
+with tabs[2]: # SI接頭語 Q ~ q
+    st.caption("Q(10^30) to q(10^-30)")
     si_keys = list(SI_MAP.keys())
     for i in range(0, len(si_keys), 5):
         cols = st.columns(5)
         for j in range(5):
-            if i + j < len(si_keys):
-                k = si_keys[i+j]
-                if cols[j].button(k): st.session_state.display += k; st.rerun()
+            if i+j < len(si_keys):
+                p = si_keys[i+j]
+                if cols[j].button(p): st.session_state.display += p; st.rerun()
 
-with t4:
-    st.markdown('<div class="input-group">', unsafe_allow_html=True)
+with tabs[3]: # 有料
+    st.markdown('<div class="frame-box">', unsafe_allow_html=True)
     m = st.radio("SELECT", [L["fuel"], L["cur"], L["cry"]], horizontal=True)
     if L["fuel"] in m:
-        loc = st.selectbox("SS", ["OME (188)", "TACHIKAWA (169)", "AVG (176)"])
-        p = 188 if "OME" in loc else (169 if "TACHIKAWA" in loc else 176)
+        loc = st.selectbox("SS", ["OME(188)", "TACHI(169)", "AVG(176)"])
+        p = 188 if "OME" in loc else (169 if "TACHI" in loc else 176)
         lit = st.number_input("L", 1.0, 500.0, 50.0)
-        st.info(f"TOTAL: {int(p*lit):,} JPY")
+        st.info(f"Total: {int(p*lit):,} JPY")
     elif L["cur"] in m:
         u = st.session_state.rates["USD"]
-        amt = st.number_input("USD", 0.0, 100000.0, 100.0)
-        st.info(f"{amt * u:,.0f} JPY")
+        v = st.number_input("USD", 0.0, 100000.0, 100.0)
+        st.info(f"{v * u:,.0f} JPY")
     elif L["cry"] in m:
-        coin = st.selectbox("COIN", ["BTC", "ETH"])
-        p = st.session_state.rates[coin]
-        hold = st.number_input("HOLD", 0.0, 100.0, 0.1, format="%.4f")
-        st.info(f"{int(hold * p):,} JPY")
+        c = st.selectbox("Coin", ["BTC", "ETH"])
+        h = st.number_input("Amount", 0.0, 100.0, 0.1)
+        st.info(f"{int(h * st.session_state.rates[c]):,} JPY")
     st.markdown('</div>', unsafe_allow_html=True)

@@ -9,16 +9,16 @@ st.set_page_config(page_title="Python Calculator Premium", layout="centered")
 # --- 2. キーボード無効化スクリプト ---
 st.components.v1.html("<script>const observer = new MutationObserver(() => { const inputs = window.parent.document.querySelectorAll('input[role=\"combobox\"]'); inputs.forEach(input => { input.setAttribute('readonly', 'true'); }); }); observer.observe(window.parent.document.body, { childList: true, subtree: true });</script>", height=0)
 
-# --- 3. 完全多言語リソース ---
+# --- 3. 多言語リソース ---
 LANG_DATA = {
     "JP": {
         "title": "Python Calculator Premium",
         "modes": ["通常", "科学計算", "値数", "拡縮", "有料機能"],
-        "tax_m": "税金計算", "cur_m": "為替・金銀銅", "gas_m": "ガソリンレート", "cry_m": "仮想通貨",
+        "tax_m": "税金計算", "cur_m": "為替・金銀銅", "gas_m": "東京エネオス", "cry_m": "仮想通貨",
         "exec": "計算実行", "amt": "金額/数量を入力",
         "heir": "相続人の人数",
         "tax_list": ["所得税", "相続税 (控除後)", "贈与税", "住民税", "法人税", "税込10%", "税抜10%"],
-        "cur_list": ["JPY (日本円)", "USD (米国ドル)", "EUR (ユーロ)", "XAU (金)", "XAG (銀)", "XPT (白金)", "XCU (銅)"],
+        "cur_list": ["JPY (日本円)", "USD (米国ドル)", "EUR (ユーロ)", "XAU (金)", "XAG (銀)", "XPT (プラチナ)", "XCU (銅)"],
         "stat_labels": ["平均 (Mean)", "中央値 (Median)", "最頻値 (Mode)", "最大値 (Max)", "最小値 (Min)"],
         "gas_list": ["東京 ENEOS (レギュラー)", "東京 ENEOS (ハイオク)", "東京 ENEOS (軽油)", "米国平均", "欧州平均"],
         "cry_list": ["BTC (ビットコイン)", "ETH (イーサリアム)", "XRP (リップル)", "SOL (ソラナ)"]
@@ -39,18 +39,33 @@ LANG_DATA = {
 for k in ["ZH", "HI", "ES", "AR", "FR", "RU", "PT"]:
     if k not in LANG_DATA: LANG_DATA[k] = LANG_DATA["EN"]
 
-# --- 4. CSS ---
+# --- 4. CSS (黒ボタン・白文字・左寄り言語ボタン) ---
 st.markdown("""
 <style>
     .main .block-container { max-width: 100% !important; padding: 10px !important; }
     header {visibility: hidden;}
+    /* タイトルデザイン */
+    .app-header { text-align: center; font-size: 28px; font-weight: 900; padding: 10px; border-bottom: 2px solid #333; margin-bottom: 20px; }
+    /* ディスプレイデザイン */
     .display {
         display: flex; align-items: center; justify-content: flex-end; font-size: 45px; font-weight: 900; 
-        margin-bottom: 10px; padding: 15px; border: 4px solid #000; border-radius: 12px; 
-        min-height: 110px; background: rgba(128,128,128,0.1); word-break: break-all;
+        margin-bottom: 10px; padding: 15px; border: 3px solid #000; border-radius: 12px; 
+        min-height: 100px; background: #f8f9fa; word-break: break-all; color: #000;
     }
-    div.stButton > button { width: 100% !important; height: 55px !important; font-weight: 900 !important; }
-    .tax-box { border: 4px solid #34C759; border-radius: 12px; padding: 15px; text-align: center; font-size: 24px; font-weight: 900; margin-top:10px; background: rgba(52,199,89,0.1); }
+    /* ボタン共通: 黒背景・白文字 */
+    div.stButton > button { 
+        width: 100% !important; height: 55px !important; 
+        background-color: #1A1A1A !important; color: #FFFFFF !important; 
+        font-weight: 900 !important; border: 1px solid #333 !important;
+        border-radius: 8px !important;
+    }
+    div.stButton > button:hover { background-color: #333 !important; }
+    /* 特殊ボタン */
+    button[key="btn_del"] { background-color: #FF3B30 !important; border: none !important; }
+    button[key="btn_exe"] { background-color: #34C759 !important; border: none !important; font-size: 40px !important; }
+    .tax-box { border: 3px solid #1A1A1A; border-radius: 12px; padding: 15px; text-align: center; font-size: 24px; font-weight: 900; margin-top:10px; }
+    /* 言語選択を左に寄せるためのコンテナ */
+    .lang-container { display: flex; justify-content: flex-start; margin-bottom: -40px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -60,12 +75,17 @@ for key, val in {'f_state':"", 'm_idx':0, 'lang':"JP", 'p_sub':"tax", 'tax_res':
 
 SI_MAP = {'Q':1e30,'R':1e27,'Y':1e24,'Z':1e21,'E':1e18,'P':1e15,'T':1e12,'G':1e9,'M':1e6,'k':1e3,'h':1e2,'da':10,'d':0.1,'c':0.01,'m':0.001,'μ':1e-6,'n':1e-9,'p':1e-12,'f':1e-15,'a':1e-18,'z':1e-21,'y':1e-24,'r':1e-27,'q':1e-30}
 
-# 言語選択
-new_l = st.selectbox("", list(LANG_DATA.keys()), index=list(LANG_DATA.keys()).index(st.session_state.lang), key="main_lang_sel")
-if new_l != st.session_state.lang:
-    st.session_state.lang = new_l; st.rerun()
+# 言語選択 (左配置)
+col_l, col_r = st.columns([1, 3])
+with col_l:
+    new_l = st.selectbox("", list(LANG_DATA.keys()), index=list(LANG_DATA.keys()).index(st.session_state.lang), key="lang_sel", label_visibility="collapsed")
+    if new_l != st.session_state.lang:
+        st.session_state.lang = new_l; st.rerun()
 
 L = LANG_DATA[st.session_state.lang]
+
+# タイトル
+st.markdown(f'<div class="app-header">{L["title"]}</div>', unsafe_allow_html=True)
 
 # 画面描画
 st.markdown(f'<div class="display">{st.session_state.f_state if st.session_state.f_state else "0"}</div>', unsafe_allow_html=True)
@@ -130,17 +150,15 @@ elif idx == 4: # 有料
     
     if st.session_state.p_sub == "tax":
         sel = st.selectbox("Menu", L["tax_list"], key=f"tax_s_{cur_lang}")
-        heirs = 1
         if "相続" in sel or "Inheritance" in sel:
-            heirs = st.number_input(L["heir"], 1, 10, 1, key=f"heir_in_{cur_lang}")
+            heirs = st.number_input(L["heir"], 1, 10, 1, key=f"h_{cur_lang}")
         amt = st.text_input(L["amt"], key=f"t_in_{cur_lang}")
         if st.button(L["exec"], key=f"t_r_{cur_lang}"):
             try:
                 v = float(amt)
                 if "相続" in sel or "Inheritance" in sel:
                     deduction = 30000000 + (6000000 * heirs)
-                    taxable = max(0, v - deduction)
-                    res = taxable * 0.15 # 簡易レート
+                    res = max(0, v - deduction) * 0.15
                 elif "10%" in sel: res = v * 1.1 if "税込" in sel else v / 1.1
                 else: res = v * 0.2
                 st.session_state.tax_res = f"Result: {format(int(res), ',')}"
@@ -153,7 +171,7 @@ elif idx == 4: # 有料
         amt = st.text_input(L["amt"], key=f"c_in_{cur_lang}")
         if st.button(L["exec"], key=f"c_r_{cur_lang}"):
             try:
-                # 銅(XCU)を追加レート設定 (154円/USD前提)
+                # 銅(XCU)を含めた最新レート
                 r_map = {"JPY":154.0, "USD":1.0, "EUR":0.95, "XAU":0.00038, "XAG":0.032, "XPT":0.01, "XCU":0.11}
                 val = (float(amt) / r_map[c1[:3]]) * r_map[c2[:3]]
                 st.session_state.tax_res = f"{format(val, '.4f')} {c2[:3]}"
@@ -164,10 +182,10 @@ elif idx == 4: # 有料
         g_sel = st.selectbox("Station", L["gas_list"], key=f"g_s_{cur_lang}")
         amt = st.text_input(L["amt"] + " (L)", key=f"g_i_{cur_lang}")
         if st.button(L["exec"], key=f"g_r_{cur_lang}"):
-            # 東京ENEOS実勢レート (2025/12)
+            # 東京ENEOS実勢レート
             prices = {"東京": 178, "Tokyo": 178, "High": 189, "ハイオク": 189, "Diesel": 158, "軽油": 158}
             p = prices.get(next((k for k in prices if k in g_sel), "東京"), 178)
-            try: st.session_state.tax_res = f"ENEOS Price: {int(float(amt) * p)} JPY"
+            try: st.session_state.tax_res = f"ENEOS Cost: {int(float(amt) * p)} JPY"
             except: st.session_state.tax_res = "Error"
             st.rerun()
 
@@ -178,7 +196,7 @@ elif idx == 4: # 有料
             try:
                 p_map = {"BTC":15200000, "ETH":510000, "XRP":380, "SOL":35000}
                 res = float(amt) * p_map.get(cr_sel[:3], 0)
-                st.session_state.tax_res = f"Market Value: {format(int(res), ',')} JPY"
+                st.session_state.tax_res = f"Market: {format(int(res), ',')} JPY"
             except: st.session_state.tax_res = "Error"
             st.rerun()
 

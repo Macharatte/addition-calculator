@@ -3,15 +3,11 @@ import math
 import statistics
 import re
 
-# --- 1. ページ構成 & 状態リセット ---
-st.set_page_config(page_title="Calculator Premium v2.5", layout="centered")
-
-# バージョン管理でキャッシュを強制破棄
-APP_VERSION = "2025.12.29_vFINAL"
-if 'app_ver' not in st.session_state or st.session_state.app_ver != APP_VERSION:
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
-    st.session_state.app_ver = APP_VERSION
+# --- 1. ページ構成 & キャッシュ強制リセット ---
+APP_ID = "v2025_12_29_SPECIAL" # 以前のデータを破棄するためのキー
+if 'app_id' not in st.session_state or st.session_state.app_id != APP_ID:
+    st.session_state.clear()
+    st.session_state.app_id = APP_ID
     st.session_state.lang = "JP"
     st.session_state.f_state = ""
     st.session_state.m_idx = 0
@@ -31,31 +27,35 @@ def parse_val(s):
     try: return float(s)
     except: return 0.0
 
-# --- 3. 多言語リソース (2025年最新) ---
+# --- 3. データリソース ---
+GAS_PRICES = {
+    "最高額店 (青梅市河辺町)": {"レギュラー": 188, "ハイオク": 199, "軽油": 167},
+    "最低額店 (立川市一番町)": {"レギュラー": 169, "ハイオク": 180, "軽油": 148},
+    "東京 ENEOS 平均": {"レギュラー": 176, "ハイオク": 187, "軽油": 155}
+}
+
 LANG_DATA = {
     "JP": {
         "title": "Python Calculator Premium",
         "modes": ["通常", "科学計算", "値数", "拡縮", "有料機能"],
-        "tax_m": "精密税計算", "cur_m": "為替・金銀銅", "gas_m": "東京エネオス", "cry_m": "仮想通貨",
-        "exec": "計算実行", "amt": "金額 (例: 10k, 1.5M)", "heir": "法定相続人の数",
-        "tax_list": ["所得税(2025累進)", "相続税(2025精密)", "贈与税(1.1M控除)", "法人税(概算)", "住民税(10%)", "税込10%", "税抜10%", "税込8%", "税抜8%"],
-        "cur_list": ["JPY (日本円)", "USD (米国ドル)", "EUR (ユーロ)", "GBP (英国ポンド)", "XAU (金/g)", "XAG (銀/g)", "XCU (銅/g)"],
-        "gas_list": ["レギュラー (東京176円)", "ハイオク (東京187円)", "軽油 (東京155円)", "米国平均 ($/gal)", "欧州平均 (EUR/L)"],
-        "cry_list": ["BTC (ビットコイン)", "ETH (イーサリアム)", "XRP (リップル)", "SOL (ソラナ)", "DOGE (ドージ)"]
+        "tax_m": "精密税計算", "cur_m": "為替・金銀銅", "gas_m": "ガソリン(東京特定)", "cry_m": "仮想通貨",
+        "exec": "計算実行", "amt": "金額/数量 (例: 10k, 2M)", "heir": "法定相続人の数",
+        "tax_list": ["相続税(2025精密)", "所得税(2025累進)", "贈与税(1.1M控除)", "税込10%", "税抜10%"],
+        "cur_list": ["JPY (日本円)", "USD (米国ドル)", "EUR (ユーロ)", "XAU (金/g)", "XAG (銀/g)", "XCU (銅/g)"],
+        "cry_list": ["BTC (1,397万)", "ETH (48.5万)", "XRP (392円)", "SOL (3.4万)"]
     },
     "EN": {
-        "title": "Premium Calc v2.5",
+        "title": "Premium Calc v2.6",
         "modes": ["Basic", "Sci", "Stats", "SI", "Paid"],
-        "tax_m": "Tax", "cur_m": "Fx/Metal", "gas_m": "Gas", "cry_m": "Crypto",
-        "exec": "Exec", "amt": "Value (e.g. 10k)", "heir": "Heirs",
-        "tax_list": ["Income Tax", "Inheritance", "Gift Tax", "Corporate", "Residency", "VAT 10%", "Excl 10%", "VAT 8%", "Excl 8%"],
-        "cur_list": ["JPY", "USD", "EUR", "GBP", "XAU", "XAG", "XCU"],
-        "gas_list": ["Regular (Tokyo)", "Premium (Tokyo)", "Diesel (Tokyo)", "USA", "Europe"],
-        "cry_list": ["BTC", "ETH", "XRP", "SOL", "DOGE"]
+        "tax_m": "Tax", "cur_m": "Fx/Metal", "gas_m": "Gas (Tokyo)", "cry_m": "Crypto",
+        "exec": "Calculate", "amt": "Value (e.g. 10k)", "heir": "Heirs",
+        "tax_list": ["Inheritance", "Income Tax", "Gift Tax", "VAT 10%", "Excl 10%"],
+        "cur_list": ["JPY", "USD", "EUR", "XAU", "XAG", "XCU"],
+        "cry_list": ["BTC", "ETH", "XRP", "SOL"]
     }
 }
 
-# --- 4. CSS (ブラック & ホワイト モダン) ---
+# --- 4. CSS スタイル ---
 st.markdown("""
 <style>
     .main .block-container { max-width: 100% !important; padding: 10px !important; }
@@ -63,7 +63,7 @@ st.markdown("""
     .display {
         display: flex; align-items: center; justify-content: flex-end; font-size: 45px; font-weight: 900; 
         margin: 10px 0; padding: 20px; border: 3px solid #000; border-radius: 12px; 
-        min-height: 90px; background: #FFF; color: #000; word-break: break-all;
+        min-height: 90px; background: #FFF; color: #000;
     }
     div.stButton > button { 
         width: 100% !important; height: 55px !important; 
@@ -76,19 +76,16 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 言語選択（左上）
-c_l, _ = st.columns([1, 3])
-with c_l:
-    new_lang = st.selectbox("", ["JP", "EN"], index=0 if st.session_state.lang=="JP" else 1, key=f"ls_{APP_VERSION}", label_visibility="collapsed")
-    if new_lang != st.session_state.lang:
-        st.session_state.lang = new_lang
-        st.rerun()
+# 言語選択（左）
+cl, _ = st.columns([1, 3])
+with cl:
+    st.session_state.lang = st.selectbox("", ["JP", "EN"], index=0 if st.session_state.lang=="JP" else 1, label_visibility="collapsed")
 
 L = LANG_DATA[st.session_state.lang]
 st.markdown(f'<div style="text-align:center;font-size:22px;font-weight:900;">{L["title"]}</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="display">{st.session_state.f_state if st.session_state.f_state else "0"}</div>', unsafe_allow_html=True)
 
-# 電卓キー
+# キーボード
 keys = ["7","8","9","π","√","+","4","5","6","e","^^","−","1","2","3","i","(-)","×","0","00",".","(",")","÷"]
 cols = st.columns(6)
 for i, k in enumerate(keys):
@@ -114,9 +111,8 @@ mc = st.columns(5)
 for i, m_n in enumerate(L["modes"]):
     if mc[i].button(m_n, key=f"n_{i}"): st.session_state.m_idx = i; st.rerun()
 
-# --- 6. 有料機能：2025年最新ロジック ---
+# --- 5. 有料機能：2025年12月29日 最新データ ---
 if st.session_state.m_idx == 4:
-    k_id = APP_VERSION + st.session_state.lang
     pc = st.columns(4)
     if pc[0].button(L["tax_m"]): st.session_state.p_sub = "tax"; st.rerun()
     if pc[1].button(L["cur_m"]): st.session_state.p_sub = "cur"; st.rerun()
@@ -124,65 +120,50 @@ if st.session_state.m_idx == 4:
     if pc[3].button(L["cry_m"]): st.session_state.p_sub = "cry"; st.rerun()
 
     if st.session_state.p_sub == "tax":
-        sel = st.selectbox("項目", L["tax_list"], key=f"ts_{k_id}")
-        heirs = 1
-        if "相続" in sel: heirs = st.number_input(L["heir"], 1, 10, 1, key=f"hi_{k_id}")
-        amt_in = st.text_input(L["amt"], key=f"ti_{k_id}")
-        if st.button(L["exec"], key=f"tr_{k_id}"):
-            v = parse_val(amt_in)
+        sel = st.selectbox("項目", L["tax_list"], key="ts_1")
+        h = 1
+        if "相続" in sel: h = st.number_input(L["heir"], 1, 10, 1)
+        v = parse_val(st.text_input(L["amt"], key="ti_1"))
+        if st.button(L["exec"]):
             if "相続" in sel:
-                taxable = max(0, v - (30000000 + 6000000 * heirs))
-                # 2025 精密累進課税
+                taxable = max(0, v - (30000000 + 6000000 * h))
                 if taxable <= 1e7: r, d = 0.1, 0
                 elif taxable <= 3e7: r, d = 0.15, 5e5
                 elif taxable <= 5e7: r, d = 0.2, 2e6
                 elif taxable <= 1e8: r, d = 0.3, 7e6
-                elif taxable <= 2e8: r, d = 0.4, 1.7e7
-                elif taxable <= 6e8: r, d = 0.45, 2.7e7
-                else: r, d = 0.55, 7.2e7
-                st.session_state.tax_res = f"予想納税額: {format(int(taxable*r-d), ',')} JPY"
-            elif "所得" in sel:
-                if v <= 1950000: r, d = 0.05, 0
-                elif v <= 3300000: r, d = 0.1, 97500
-                elif v <= 6950000: r, d = 0.2, 427500
-                elif v <= 9000000: r, d = 0.23, 636000
-                elif v <= 18000000: r, d = 0.33, 1536000
-                elif v <= 40000000: r, d = 0.4, 2796000
-                else: r, d = 0.45, 4796000
-                st.session_state.tax_res = f"概算所得税: {format(int(v*r-d), ',')} JPY"
+                else: r, d = 0.4, 1.7e7
+                st.session_state.tax_res = f"納税総額予想: {format(int(taxable*r-d), ',')} JPY"
             elif "10%" in sel:
                 st.session_state.tax_res = f"結果: {format(int(v*1.1 if '税込' in sel else v/1.1), ',')} JPY"
-            elif "8%" in sel:
-                st.session_state.tax_res = f"結果: {format(int(v*1.08 if '税込' in sel else v/1.08), ',')} JPY"
             st.rerun()
 
     elif st.session_state.p_sub == "cur":
-        # 2025/12/29 最新市場レート
-        r_map = {"JPY":1.0, "USD":156.40, "EUR":164.20, "GBP":197.80, "XAU":13200.0, "XAG":155.0, "XCU":1.45}
-        c1 = st.selectbox("元", L["cur_list"], key=f"c1_{k_id}")
-        c2 = st.selectbox("先", L["cur_list"], key=f"c2_{k_id}")
-        v = parse_val(st.text_input(L["amt"], key=f"ci_{k_id}"))
-        if st.button(L["exec"], key=f"cr_{k_id}"):
+        # 2025/12/29 レート
+        r_map = {"JPY":1.0, "USD":156.40, "EUR":164.20, "XAU":13200.0, "XAG":155.0, "XCU":1.45}
+        c1 = st.selectbox("元", L["cur_list"], key="c1")
+        c2 = st.selectbox("先", L["cur_list"], key="c2")
+        v = parse_val(st.text_input(L["amt"], key="ci_2"))
+        if st.button(L["exec"]):
             res = v * (r_map[c1[:3]] / r_map[c2[:3]])
             st.session_state.tax_res = f"{format(res, ',.3f')} {c2[:3]}"
             st.rerun()
 
     elif st.session_state.p_sub == "gas":
-        g_sel = st.selectbox("種別", L["gas_list"], key=f"gs_{k_id}")
-        prices = {"レギュラー": 176, "ハイオク": 187, "軽油": 155, "米国": 142, "欧州": 285}
-        v = parse_val(st.text_input(L["amt"], key=f"gi_{k_id}"))
-        if st.button(L["exec"], key=f"gr_{k_id}"):
-            p = prices.get(next((k for k in prices if k in g_sel), "レギュラー"), 176)
-            st.session_state.tax_res = f"給油合計額: {format(int(v*p), ',')} JPY"
+        loc = st.selectbox("地点選択", list(GAS_PRICES.keys()), key="gs_1")
+        typ = st.selectbox("燃料種別", ["レギュラー", "ハイオク", "軽油"], key="gt_1")
+        v = parse_val(st.text_input("給油量 (L)", key="gi_1"))
+        if st.button(L["exec"]):
+            p = GAS_PRICES[loc][typ]
+            st.session_state.tax_res = f"{loc}\n{typ}: {p}円/L → 合計: {format(int(v*p), ',')} JPY"
             st.rerun()
 
     elif st.session_state.p_sub == "cry":
-        p_map = {"BTC":13972000, "ETH":485500, "XRP":392, "SOL":34800, "DOG":38}
-        cr = st.selectbox("銘柄", L["cry_list"], key=f"cry_{k_id}")
-        v = parse_val(st.text_input(L["amt"], key=f"cryi_{k_id}"))
-        if st.button(L["exec"], key=f"cryr_{k_id}"):
+        p_map = {"BTC":13972000, "ETH":485500, "XRP":392, "SOL":34800}
+        cr = st.selectbox("銘柄", L["cry_list"], key="cry_1")
+        v = parse_val(st.text_input("保有量", key="ci_3"))
+        if st.button(L["exec"]):
             res = v * p_map.get(cr[:3], 0)
-            st.session_state.tax_res = f"時価評価額: {format(int(res), ',')} JPY"
+            st.session_state.tax_res = f"時価評価: {format(int(res), ',')} JPY"
             st.rerun()
 
     st.markdown(f'<div class="res-box">{st.session_state.tax_res}</div>', unsafe_allow_html=True)

@@ -4,16 +4,16 @@ import statistics
 import urllib.request
 import json
 
-# --- 1. 強制リセット (新しいURL/ファイル名でも確実にクリーンな状態にする) ---
-if 'enforce_v4_update' not in st.session_state:
+# --- 1. 強制リセット & 状態管理 ---
+if 'v5_theme_fix' not in st.session_state:
     st.session_state.clear()
-    st.session_state.enforce_v4_update = True
+    st.session_state.v5_theme_fix = True
     st.session_state.display = ""
     st.session_state.lang = "日本語"
     st.session_state.theme = "Dark"
     st.session_state.rates = {"USD": 156.4, "BTC": 13972000, "ETH": 485500}
 
-# --- 2. 10言語完全定義 ---
+# --- 2. 10言語定義 ---
 L_MAP = {
     "日本語": {"upd": "レート更新", "thm": "表示切替", "clr": "消去", "exe": "計算実行", "si": "接頭語", "sci": "科学", "stat": "統計", "paid": "有料機能", "fuel": "ガソリン", "cur": "通貨レート", "tax": "税金計算"},
     "English": {"upd": "UPDATE", "thm": "THEME", "clr": "CLEAR", "exe": "EXEC", "si": "SI", "sci": "SCI", "stat": "STAT", "paid": "PREMIUM", "fuel": "FUEL", "cur": "FOREX", "tax": "TAX"},
@@ -32,15 +32,42 @@ SI_CONV = {
     'm': '*1e-3', 'μ': '*1e-6', 'n': '*1e-9', 'p': '*1e-12', 'f': '*1e-15', 'a': '*1e-18', 'z': '*1e-21', 'y': '*1e-24', 'r': '*1e-27', 'q': '*1e-30'
 }
 
-# --- 3. デザイン設定 ---
+# --- 3. 動的デザイン設定 ---
 is_dark = st.session_state.theme == "Dark"
-bg, txt, dbg = ("#000000", "#FFFFFF", "#151515") if is_dark else ("#FFFFFF", "#000000", "#F0F2F6")
-st.markdown(f"""<style>
-    .stApp {{background-color:{bg}; color:{txt};}}
-    .disp {{background:{dbg}; color:{txt}; padding:25px; border:3px solid {txt}; border-radius:10px; font-size:45px; text-align:right; font-family:monospace; margin-bottom:10px; overflow-x: auto;}}
-    div.stButton > button {{width:100%; border:1px solid {txt}; height:50px; background:{dbg}; color:{txt}; font-weight:bold;}}
-    .paid-box {{border:2px solid {txt}; padding:20px; border-radius:10px; background:{dbg}; margin-top:10px;}}
-</style>""", unsafe_allow_html=True)
+# 背景と文字色の定義
+bg_color = "#000000" if is_dark else "#FFFFFF"
+text_color = "#FFFFFF" if is_dark else "#000000"
+accent_color = "#1E1E1E" if is_dark else "#F0F2F6"
+
+st.markdown(f"""
+<style>
+    .stApp {{ background-color: {bg_color}; color: {text_color}; }}
+    /* ディスプレイ表示 */
+    .disp {{
+        background-color: {accent_color}; color: {text_color};
+        padding: 25px; border: 3px solid {text_color};
+        border-radius: 10px; font-size: 45px; text-align: right;
+        font-family: monospace; margin-bottom: 15px;
+    }}
+    /* ボタン共通 */
+    div.stButton > button {{
+        width: 100%; border: 1px solid {text_color};
+        height: 50px; background-color: {accent_color};
+        color: {text_color} !important; font-weight: bold;
+    }}
+    /* 有料機能用コンテナ (ここがポイント) */
+    .paid-box {{
+        border: 2px solid {text_color};
+        padding: 20px; border-radius: 10px;
+        background-color: {accent_color};
+        color: {text_color} !important;
+    }}
+    /* Streamlitのウィジェット（ラジオボタンや入力）の文字色を強制 */
+    .stMarkdown, .stRadio, .stNumberInput, .stSelectbox {{
+        color: {text_color} !important;
+    }}
+</style>
+""", unsafe_allow_html=True)
 
 # --- 4. トップナビ ---
 L = L_MAP[st.session_state.lang]
@@ -60,13 +87,11 @@ with c3:
     if st.button(L["thm"]):
         st.session_state.theme = "Light" if is_dark else "Dark"; st.rerun()
 
-# --- 5. 演算子制御ロジック ---
+# --- 5. 演算子制御関数 ---
 def input_key(k):
     curr = st.session_state.display
     ops = ["+", "−", "×", "÷"]
-    # 式頭の演算子防止
     if curr == "" and k in ops: return
-    # 演算子の連続を置換（最新を優先）
     if len(curr) > 0 and curr[-1] in ops and k in ops:
         st.session_state.display = curr[:-1] + k
     else:
@@ -119,22 +144,28 @@ with t_stat:
     if st.button("CLOSE ])"): st.session_state.display += "])"; st.rerun()
 
 with t_paid:
-    st.markdown('<div class="paid-box">', unsafe_allow_html=True)
-    mode = st.radio("SELECT", [L["fuel"], L["cur"], L["tax"]], horizontal=True)
+    # 有料機能コンテナ（文字色と背景をテーマに追従）
+    st.markdown(f'<div class="paid-box">', unsafe_allow_html=True)
+    mode = st.radio(f"{L['paid']} SELECT", [L["fuel"], L["cur"], L["tax"]], horizontal=True)
     
     if mode == L["fuel"]:
-        st.subheader(L["fuel"])
-        lit = st.number_input("Litre (L)", 1.0, 500.0, 50.0)
+        st.subheader(f"⛽ {L['fuel']}")
+        lit = st.number_input("Litre", 1.0, 500.0, 50.0)
         p = st.selectbox("JPY/L", [188, 169, 176])
-        st.info(f"Total: {int(lit * p):,} JPY")
+        st.markdown(f"### Total: **{int(lit * p):,} JPY**")
+        
     elif mode == L["cur"]:
-        st.subheader(L["cur"])
+        st.subheader(f"💱 {L['cur']}")
         u = st.session_state.rates["USD"]
         amt = st.number_input("USD", 0.0, 1000000.0, 100.0)
-        st.success(f"{amt * u:,.0f} JPY (1USD={u:.2f}JPY)")
+        st.markdown(f"### **{amt * u:,.0f} JPY**")
+        st.caption(f"(Rate: 1 USD = {u:.2f} JPY)")
+        
     elif mode == L["tax"]:
-        st.subheader(L["tax"])
-        val = st.number_input("Amount", 0.0, 10000000.0, 10000.0)
-        rate = st.radio("Rate", [0.08, 0.10], horizontal=True)
-        st.warning(f"Incl. Tax: {int(val * (1+rate)):,} JPY")
+        st.subheader(f"🧾 {L['tax']}")
+        val = st.number_input("Net Amount", 0.0, 10000000.0, 10000.0)
+        rate = st.radio("Tax Rate", [0.08, 0.10], horizontal=True)
+        st.markdown(f"### Total: **{int(val * (1+rate)):,} JPY**")
+        st.caption(f"Tax: {int(val*rate):,} JPY")
+    
     st.markdown('</div>', unsafe_allow_html=True)

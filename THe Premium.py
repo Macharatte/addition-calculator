@@ -5,9 +5,9 @@ import urllib.request
 import json
 
 # --- 1. 強制リセット & 状態管理 ---
-if 'v5_theme_fix' not in st.session_state:
+if 'v6_contrast_fix' not in st.session_state:
     st.session_state.clear()
-    st.session_state.v5_theme_fix = True
+    st.session_state.v6_contrast_fix = True
     st.session_state.display = ""
     st.session_state.lang = "日本語"
     st.session_state.theme = "Dark"
@@ -32,39 +32,46 @@ SI_CONV = {
     'm': '*1e-3', 'μ': '*1e-6', 'n': '*1e-9', 'p': '*1e-12', 'f': '*1e-15', 'a': '*1e-18', 'z': '*1e-21', 'y': '*1e-24', 'r': '*1e-27', 'q': '*1e-30'
 }
 
-# --- 3. 動的デザイン設定 ---
+# --- 3. 動的ハイコントラスト・デザイン ---
 is_dark = st.session_state.theme == "Dark"
-# 背景と文字色の定義
 bg_color = "#000000" if is_dark else "#FFFFFF"
 text_color = "#FFFFFF" if is_dark else "#000000"
-accent_color = "#1E1E1E" if is_dark else "#F0F2F6"
+inv_text = "#000000" if is_dark else "#FFFFFF"  # 背景の逆色
 
 st.markdown(f"""
 <style>
+    /* 全体背景と基本文字色 */
     .stApp {{ background-color: {bg_color}; color: {text_color}; }}
-    /* ディスプレイ表示 */
+    
+    /* 計算機ディスプレイ */
     .disp {{
-        background-color: {accent_color}; color: {text_color};
-        padding: 25px; border: 3px solid {text_color};
-        border-radius: 10px; font-size: 45px; text-align: right;
-        font-family: monospace; margin-bottom: 15px;
+        background-color: {bg_color}; color: {text_color};
+        padding: 25px; border: 4px solid {text_color};
+        border-radius: 12px; font-size: 48px; text-align: right;
+        font-family: 'Courier New', monospace; margin-bottom: 20px;
     }}
-    /* ボタン共通 */
-    div.stButton > button {{
-        width: 100%; border: 1px solid {text_color};
-        height: 50px; background-color: {accent_color};
-        color: {text_color} !important; font-weight: bold;
-    }}
-    /* 有料機能用コンテナ (ここがポイント) */
+
+    /* タブの文字色を強制 */
+    .stTabs [data-baseweb="tab"] p {{ color: {text_color} !important; font-weight: bold; font-size: 18px; }}
+    
+    /* 有料機能ボックス (枠と中身の文字色を完全に同期) */
     .paid-box {{
-        border: 2px solid {text_color};
-        padding: 20px; border-radius: 10px;
-        background-color: {accent_color};
+        border: 4px solid {text_color};
+        padding: 25px; border-radius: 15px;
+        background-color: {bg_color};
         color: {text_color} !important;
+        margin-top: 10px;
     }}
-    /* Streamlitのウィジェット（ラジオボタンや入力）の文字色を強制 */
-    .stMarkdown, .stRadio, .stNumberInput, .stSelectbox {{
+
+    /* 全ての入力ラベル、選択肢、キャプションの色を強制反転 */
+    label, p, .stMarkdown, .stRadio, .stNumberInput, .stSelectbox, .stCaption {{
         color: {text_color} !important;
+        font-weight: 600 !important;
+    }}
+
+    /* 入力欄自体の枠線も見えるように調整 */
+    div[data-baseweb="input"], div[data-baseweb="select"] {{
+        border: 1px solid {text_color} !important;
     }}
 </style>
 """, unsafe_allow_html=True)
@@ -87,7 +94,7 @@ with c3:
     if st.button(L["thm"]):
         st.session_state.theme = "Light" if is_dark else "Dark"; st.rerun()
 
-# --- 5. 演算子制御関数 ---
+# --- 5. 入力制御 ---
 def input_key(k):
     curr = st.session_state.display
     ops = ["+", "−", "×", "÷"]
@@ -144,28 +151,33 @@ with t_stat:
     if st.button("CLOSE ])"): st.session_state.display += "])"; st.rerun()
 
 with t_paid:
-    # 有料機能コンテナ（文字色と背景をテーマに追従）
+    # --- ここから有料機能（視認性向上版） ---
     st.markdown(f'<div class="paid-box">', unsafe_allow_html=True)
-    mode = st.radio(f"{L['paid']} SELECT", [L["fuel"], L["cur"], L["tax"]], horizontal=True)
     
+    # カテゴリ選択
+    st.write(f"### {L['paid']}")
+    mode = st.radio(f"{L['paid']} カテゴリ選択", [L["fuel"], L["cur"], L["tax"]], horizontal=True)
+    
+    st.divider()
+
     if mode == L["fuel"]:
         st.subheader(f"⛽ {L['fuel']}")
-        lit = st.number_input("Litre", 1.0, 500.0, 50.0)
-        p = st.selectbox("JPY/L", [188, 169, 176])
-        st.markdown(f"### Total: **{int(lit * p):,} JPY**")
+        lit = st.number_input("給油量 (Litre)", 1.0, 500.0, 50.0, step=1.0)
+        p = st.selectbox("単価を選択 (JPY/L)", [188, 169, 176])
+        st.markdown(f"## 合計金額: **{int(lit * p):,} JPY**")
         
     elif mode == L["cur"]:
         st.subheader(f"💱 {L['cur']}")
         u = st.session_state.rates["USD"]
-        amt = st.number_input("USD", 0.0, 1000000.0, 100.0)
-        st.markdown(f"### **{amt * u:,.0f} JPY**")
-        st.caption(f"(Rate: 1 USD = {u:.2f} JPY)")
+        amt = st.number_input("変換するドル (USD)", 0.0, 1000000.0, 100.0)
+        st.markdown(f"## 日本円換算: **{amt * u:,.0f} JPY**")
+        st.write(f"現在のレート: 1 USD = {u:.2f} JPY")
         
     elif mode == L["tax"]:
         st.subheader(f"🧾 {L['tax']}")
-        val = st.number_input("Net Amount", 0.0, 10000000.0, 10000.0)
-        rate = st.radio("Tax Rate", [0.08, 0.10], horizontal=True)
-        st.markdown(f"### Total: **{int(val * (1+rate)):,} JPY**")
-        st.caption(f"Tax: {int(val*rate):,} JPY")
+        val = st.number_input("税抜金額 (Net Amount)", 0.0, 10000000.0, 10000.0)
+        rate = st.radio("消費税率を選択", [0.08, 0.10], horizontal=True)
+        st.markdown(f"## 税込合計: **{int(val * (1+rate)):,} JPY**")
+        st.write(f"（内消費税: {int(val*rate):,} JPY）")
     
     st.markdown('</div>', unsafe_allow_html=True)

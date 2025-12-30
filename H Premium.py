@@ -4,22 +4,24 @@ import statistics
 import urllib.request
 import json
 
-# --- 1. システム状態管理 ---
-if 'v16_jp_tax_update' not in st.session_state:
-    st.session_state.clear()
-    st.session_state.v16_jp_tax_update = True
-    st.session_state.display = ""
-    st.session_state.lang = "日本語"
-    st.session_state.theme = "Dark"
+# --- 1. システム状態管理 (永続化) ---
+if 'display' not in st.session_state: st.session_state.display = ""
+if 'lang' not in st.session_state: st.session_state.lang = "日本語"
+if 'theme' not in st.session_state: st.session_state.theme = "Dark"
+# 有料機能の選択状態を保持するキー
+if 'paid_mode' not in st.session_state: st.session_state.paid_mode = "燃料"
+if 'tax_type' not in st.session_state: st.session_state.tax_type = "消費税 (標準 10%)"
+if 'tax_base' not in st.session_state: st.session_state.tax_base = 10000.0
+if 'rates' not in st.session_state:
     st.session_state.rates = {
         "USD": 156.4, "EUR": 168.2, "GBP": 195.5, "AUD": 102.3, "CAD": 113.8,
         "CHF": 174.5, "CNH": 21.5, "HKD": 20.0, "SGD": 115.2, "NZD": 94.8,
         "BTC": 13972000, "ETH": 485500
     }
 
-# --- 2. 10言語完全定義 (内部保持) ---
+# --- 2. 言語定義 ---
 L_MAP = {
-    "日本語": {"upd": "更新", "thm": "テーマ", "clr": "消去", "exe": "実行", "si": "接頭語", "sci": "科学", "stat": "値数", "paid": "プロ", "fuel": "燃料", "cur": "通貨", "tax": "税金", "mean":"平均", "sum":"合計", "mode":"最頻", "med":"中央", "max":"最大", "min":"最小", "dev":"偏差値", "exp":"期待値"},
+    "日本語": {"upd": "更新", "thm": "表示切替", "clr": "消去", "exe": "実行", "si": "接頭語", "sci": "科学", "stat": "値数", "paid": "プロ", "fuel": "燃料", "cur": "通貨", "tax": "税金", "mean":"平均", "sum":"合計", "mode":"最頻", "med":"中央", "max":"最大", "min":"最小", "dev":"偏差値", "exp":"期待値"},
     "English": {"upd": "UPD", "thm": "THEME", "clr": "CLR", "exe": "EXE", "si": "SI", "sci": "SCI", "stat": "VAL", "paid": "PRO", "fuel": "FUEL", "cur": "FOREX", "tax": "TAX", "mean":"MEAN", "sum":"SUM", "mode":"MODE", "med":"MED", "max":"MAX", "min":"MIN", "dev":"T-SCR", "exp":"EXP"}
 }
 
@@ -62,7 +64,7 @@ st.markdown(f"""
 L = L_MAP.get(st.session_state.lang, L_MAP["English"])
 c1, c2, c3 = st.columns([1, 1, 1])
 with c1:
-    new_lang = st.selectbox("Lang", list(L_MAP.keys()), index=0, label_visibility="collapsed")
+    new_lang = st.selectbox("Lang", list(L_MAP.keys()), index=list(L_MAP.keys()).index(st.session_state.lang), label_visibility="collapsed")
     if new_lang != st.session_state.lang: st.session_state.lang = new_lang; st.rerun()
 with c2:
     if st.button(L["upd"]):
@@ -72,10 +74,12 @@ with c2:
                 for c in ["EUR", "GBP", "AUD", "CAD", "CHF", "HKD", "SGD", "NZD"]:
                     st.session_state.rates[c] = data["rates"]["JPY"] / data["rates"][c]
                 st.session_state.rates["USD"] = data["rates"]["JPY"]
-            st.toast("Updated")
+            st.toast("Success")
         except: st.error("ERR")
 with c3:
-    if st.button(L["thm"]): st.session_state.theme = "Light" if is_dark else "Dark"; st.rerun()
+    if st.button(L["thm"]):
+        st.session_state.theme = "Light" if is_dark else "Dark"
+        st.rerun()
 
 st.markdown(f'<div class="disp">{st.session_state.display if st.session_state.display else "0"}</div>', unsafe_allow_html=True)
 
@@ -130,50 +134,53 @@ with t_stat:
     if st.button(L["dev"]): st.session_state.display += "[(x-statistics.mean(d))/statistics.stdev(d)*10+50 for d in [["; st.rerun()
     if st.button("CLOSE ])"): st.session_state.display += "])"; st.rerun()
 
-# --- 7. 有料・プロ機能 (日本税制特化) ---
+# --- 7. プロ機能 (状態保持版) ---
 with t_paid:
-    mode = st.radio("SELECT FUNCTION", [L["fuel"], L["cur"], L["tax"]], horizontal=True, label_visibility="collapsed")
+    # 状態保持
+    st.session_state.paid_mode = st.radio("FUNC", [L["fuel"], L["cur"], L["tax"]], 
+                                         index=[L["fuel"], L["cur"], L["tax"]].index(st.session_state.paid_mode),
+                                         horizontal=True, label_visibility="collapsed")
     
-    if mode == L["fuel"]:
+    if st.session_state.paid_mode == L["fuel"]:
         f_col1, f_col2 = st.columns(2)
-        oil_dict = {"レギュラー": 170, "ハイオク": 181, "軽油": 149, "灯油": 115, "重油": 95, "ナフサ": 75, "アスファルト": 85, "潤滑油": 130}
-        reg_dict = {"全国平均": 0, "東京": 5, "神奈川": 2, "埼玉": 0, "千葉": -2, "大阪": 4, "北海道": 8, "九州": 10}
-        with f_col1: f_type = st.selectbox("油種", list(oil_dict.keys()))
-        with f_col2: reg = st.selectbox("地方", list(reg_dict.keys()))
+        oil_dict = {"レギュラー": 170, "ハイオク": 181, "軽油": 149, "灯油": 115, "重油": 95, "ナフサ": 75, "アスファルト": 85}
+        reg_dict = {"全国平均": 0, "東京": 5, "神奈川": 2, "大阪": 4, "北海道": 8, "九州": 10}
+        f_type = f_col1.selectbox("油種", list(oil_dict.keys()))
+        reg = f_col2.selectbox("地方", list(reg_dict.keys()))
         lit = st.number_input("数量 (L)", 1.0, 1000.0, 50.0, step=1.0)
         u_p = oil_dict[f_type] + reg_dict[reg]
         st.markdown(f'<div class="result-card"><h3>合計: {int(lit * u_p):,} JPY</h3><p>単価: {u_p}円/L</p></div>', unsafe_allow_html=True)
 
-    elif mode == L["cur"]:
+    elif st.session_state.paid_mode == L["cur"]:
         cur_list = ["USD", "EUR", "GBP", "AUD", "CAD", "CHF", "CNH", "HKD", "SGD", "NZD", "BTC", "ETH"]
-        c_target = st.selectbox("通貨を選択", cur_list)
+        c_target = st.selectbox("通貨", cur_list)
         amt = st.number_input("変換元の数量", 0.0, 1000000.0, 1.0, step=0.1)
         rate = st.session_state.rates.get(c_target, 1.0)
         st.markdown(f'<div class="result-card"><h3>結果: {amt * rate:,.2f} JPY</h3><p>1 {c_target} = {rate:,.2f}円</p></div>', unsafe_allow_html=True)
 
-    elif mode == L["tax"]:
-        # 日本の主要税率に特化
+    elif st.session_state.paid_mode == L["tax"]:
         jp_taxes = {
-            "消費税 (標準 10%)": 0.10,
-            "消費税 (軽減 8%)": 0.08,
-            "源泉徴収 (報酬 10.21%)": 0.1021,
-            "源泉徴収 (100万超 20.42%)": 0.2042,
-            "投資 (配当・譲渡 20.315%)": 0.20315,
-            "住民税など (標準 5%)": 0.05,
-            "印紙税・地方税など (3%)": 0.03,
-            "特例・軽減など (2%)": 0.02
+            "消費税 (標準 10%)": 0.10, "消費税 (軽減 8%)": 0.08,
+            "所得税 (目安 20%)": 0.20, "所得税 (高所得 45%)": 0.45,
+            "法人税 (普通 23.2%)": 0.232, "法人税 (中小 15%)": 0.15,
+            "固定資産税 (標準 1.4%)": 0.014,
+            "相続税 (最高 55%)": 0.55, "相続税 (最低 10%)": 0.10,
+            "源泉徴収 (10.21%)": 0.1021, "投資 (20.315%)": 0.20315
         }
-        t_type = st.selectbox("日本の税率・徴収率を選択", list(jp_taxes.keys()) + ["カスタム入力"])
-        base_amt = st.number_input("金額 (ベース)", 0.0, 10000000.0, 10000.0, step=100.0)
+        # 状態保持のためにindexを計算
+        current_tax_list = list(jp_taxes.keys()) + ["カスタム入力"]
+        if st.session_state.tax_type not in current_tax_list: st.session_state.tax_type = current_tax_list[0]
         
-        if t_type == "カスタム入力":
-            t_rate = st.slider("カスタム税率 (%)", 0.0, 50.0, 15.0, step=0.1) / 100
-        else:
-            t_rate = jp_taxes[t_type]
+        st.session_state.tax_type = st.selectbox("日本の税目・税率", current_tax_list, 
+                                                index=current_tax_list.index(st.session_state.tax_type))
+        
+        st.session_state.tax_base = st.number_input("金額 (ベース)", 0.0, 10000000.0, st.session_state.tax_base, step=100.0)
+        
+        t_rate = jp_taxes[st.session_state.tax_type] if st.session_state.tax_type != "カスタム入力" else st.slider("カスタム (%)", 0.0, 60.0, 15.0) / 100
             
         st.markdown(f"""
         <div class="result-card">
-            <h3>計算結果: {int(base_amt * (1+t_rate)):,} JPY</h3>
-            <p>対象額: {base_amt:,.0f}円 / 税額・徴収額: {int(base_amt * t_rate):,}円 ({t_rate*100:.3f}%)</p>
+            <h3>計算結果: {int(st.session_state.tax_base * (1+t_rate)):,} JPY</h3>
+            <p>対象額: {st.session_state.tax_base:,.0f}円 / 税額・徴収額: {int(st.session_state.tax_base * t_rate):,}円 ({t_rate*100:.3f}%)</p>
         </div>
         """, unsafe_allow_html=True)

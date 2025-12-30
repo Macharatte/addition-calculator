@@ -4,16 +4,16 @@ import statistics
 import urllib.request
 import json
 
-# --- 1. 強制リフレッシュ (構造変更を反映) ---
-if 'v_final_fix' not in st.session_state:
+# --- 1. 強制リセット (新しいURL/ファイル名でも確実にクリーンな状態にする) ---
+if 'enforce_v4_update' not in st.session_state:
     st.session_state.clear()
-    st.session_state.v_final_fix = True
+    st.session_state.enforce_v4_update = True
     st.session_state.display = ""
     st.session_state.lang = "日本語"
     st.session_state.theme = "Dark"
     st.session_state.rates = {"USD": 156.4, "BTC": 13972000, "ETH": 485500}
 
-# --- 2. 10言語定義 ---
+# --- 2. 10言語完全定義 ---
 L_MAP = {
     "日本語": {"upd": "レート更新", "thm": "表示切替", "clr": "消去", "exe": "計算実行", "si": "接頭語", "sci": "科学", "stat": "統計", "paid": "有料機能", "fuel": "ガソリン", "cur": "通貨レート", "tax": "税金計算"},
     "English": {"upd": "UPDATE", "thm": "THEME", "clr": "CLEAR", "exe": "EXEC", "si": "SI", "sci": "SCI", "stat": "STAT", "paid": "PREMIUM", "fuel": "FUEL", "cur": "FOREX", "tax": "TAX"},
@@ -35,35 +35,38 @@ SI_CONV = {
 # --- 3. デザイン設定 ---
 is_dark = st.session_state.theme == "Dark"
 bg, txt, dbg = ("#000000", "#FFFFFF", "#151515") if is_dark else ("#FFFFFF", "#000000", "#F0F2F6")
-st.markdown(f"<style>.stApp {{background-color:{bg}; color:{txt};}} .disp {{background:{dbg}; color:{txt}; padding:25px; border:3px solid {txt}; border-radius:10px; font-size:45px; text-align:right; font-family:monospace; margin-bottom:10px; overflow-x: auto; white-space: nowrap;}} div.stButton > button {{width:100%; border:1px solid {txt}; height:50px; background:{dbg}; color:{txt}; font-weight:bold;}} .paid-box {{border:2px solid {txt}; padding:20px; border-radius:10px; background:{dbg};}}</style>", unsafe_allow_html=True)
+st.markdown(f"""<style>
+    .stApp {{background-color:{bg}; color:{txt};}}
+    .disp {{background:{dbg}; color:{txt}; padding:25px; border:3px solid {txt}; border-radius:10px; font-size:45px; text-align:right; font-family:monospace; margin-bottom:10px; overflow-x: auto;}}
+    div.stButton > button {{width:100%; border:1px solid {txt}; height:50px; background:{dbg}; color:{txt}; font-weight:bold;}}
+    .paid-box {{border:2px solid {txt}; padding:20px; border-radius:10px; background:{dbg}; margin-top:10px;}}
+</style>""", unsafe_allow_html=True)
 
-# --- 4. トップナビ (言語と更新) ---
+# --- 4. トップナビ ---
 L = L_MAP[st.session_state.lang]
 c1, c2, c3 = st.columns([1, 1, 1])
 with c1:
     new_lang = st.selectbox("L", list(L_MAP.keys()), index=list(L_MAP.keys()).index(st.session_state.lang), label_visibility="collapsed")
     if new_lang != st.session_state.lang:
-        st.session_state.lang = new_lang
-        st.rerun()
+        st.session_state.lang = new_lang; st.rerun()
 with c2:
     if st.button(L["upd"]):
         try:
             with urllib.request.urlopen("https://open.er-api.com/v6/latest/USD") as r:
                 st.session_state.rates["USD"] = json.loads(r.read())["rates"]["JPY"]
-            st.toast("Rates Updated")
-        except: st.error("API Error")
+            st.toast("Success")
+        except: st.error("Error")
 with c3:
     if st.button(L["thm"]):
         st.session_state.theme = "Light" if is_dark else "Dark"; st.rerun()
 
-# --- 5. 入力ロジック関数 ---
+# --- 5. 演算子制御ロジック ---
 def input_key(k):
     curr = st.session_state.display
     ops = ["+", "−", "×", "÷"]
-    # 式頭の演算子防止 (πや.、数字以外は最初に入れない)
-    if curr == "" and k in ops:
-        return
-    # 演算子の連続防止と置換
+    # 式頭の演算子防止
+    if curr == "" and k in ops: return
+    # 演算子の連続を置換（最新を優先）
     if len(curr) > 0 and curr[-1] in ops and k in ops:
         st.session_state.display = curr[:-1] + k
     else:
@@ -77,8 +80,7 @@ rows = [["7","8","9","÷"],["4","5","6","×"],["1","2","3","−"],["0",".","π",
 for row in rows:
     cols = st.columns(4)
     for i, k in enumerate(row):
-        if cols[i].button(k, key=f"btn_{k}"):
-            input_key(k); st.rerun()
+        if cols[i].button(k, key=f"k_{k}"): input_key(k); st.rerun()
 
 cl, ex = st.columns(2)
 if cl.button(L["clr"]): st.session_state.display = ""; st.rerun()
@@ -86,14 +88,13 @@ if ex.button(L["exe"]):
     try:
         expr = st.session_state.display.replace("×", "*").replace("÷", "/").replace("−", "-")
         for k, v in SI_CONV.items(): expr = expr.replace(k, v)
-        res = eval(expr, {"math": math, "statistics": statistics})
-        st.session_state.display = format(res, '.10g')
+        st.session_state.display = format(eval(expr, {"math": math, "statistics": statistics}), '.10g')
     except: st.session_state.display = "Error"
     st.rerun()
 
 st.divider()
 
-# --- 8. タブ機能 ---
+# --- 8. 各種機能タブ ---
 t_si, t_sci, t_stat, t_paid = st.tabs([L["si"], L["sci"], L["stat"], L["paid"]])
 
 with t_si:
@@ -103,13 +104,13 @@ with t_si:
         for j in range(5):
             if i+j < len(si_keys):
                 p = si_keys[i+j]
-                if cols[j].button(p): st.session_state.display += p; st.rerun()
+                if cols[j].button(p, key=f"si_{p}"): st.session_state.display += p; st.rerun()
 
 with t_sci:
     sc = st.columns(4)
-    sf = {"sin":"math.sin(", "cos":"math.cos(", "tan":"math.tan(", "√":"math.sqrt(", "log":"math.log10(", "abs":"abs(", "(":"(", ")":")"}
+    sf = {"sin":"math.sin(", "cos":"math.cos(", "tan":"math.tan(", "√":"math.sqrt(", "log":"math.log10(", "(":"(", ")":")"}
     for i, (k, v) in enumerate(sf.items()):
-        if sc[i%4].button(k): st.session_state.display += v; st.rerun()
+        if sc[i%4].button(k, key=f"sc_{k}"): st.session_state.display += v; st.rerun()
 
 with t_stat:
     st_c = st.columns(3)
@@ -118,25 +119,22 @@ with t_stat:
     if st.button("CLOSE ])"): st.session_state.display += "])"; st.rerun()
 
 with t_paid:
-    st.markdown(f'<div class="paid-box">', unsafe_allow_html=True)
+    st.markdown('<div class="paid-box">', unsafe_allow_html=True)
     mode = st.radio("SELECT", [L["fuel"], L["cur"], L["tax"]], horizontal=True)
     
     if mode == L["fuel"]:
         st.subheader(L["fuel"])
         lit = st.number_input("Litre (L)", 1.0, 500.0, 50.0)
-        price = st.selectbox("SS", [188, 169, 176], format_func=lambda x: f"{x} JPY/L")
-        st.info(f"Total: {int(lit * price):,} JPY")
-        
+        p = st.selectbox("JPY/L", [188, 169, 176])
+        st.info(f"Total: {int(lit * p):,} JPY")
     elif mode == L["cur"]:
         st.subheader(L["cur"])
         u = st.session_state.rates["USD"]
-        amt = st.number_input("USD Amount", 0.0, 1000000.0, 100.0)
-        st.success(f"{amt:,.2f} USD = {amt * u:,.0f} JPY (1USD={u:.2f}JPY)")
-        
+        amt = st.number_input("USD", 0.0, 1000000.0, 100.0)
+        st.success(f"{amt * u:,.0f} JPY (1USD={u:.2f}JPY)")
     elif mode == L["tax"]:
         st.subheader(L["tax"])
-        val = st.number_input("Amount (Net)", 0.0, 10000000.0, 10000.0)
-        rate = st.radio("Tax Rate", [0.08, 0.10], horizontal=True)
-        st.warning(f"Total (Incl. Tax): {int(val * (1+rate)):,} JPY (Tax: {int(val*rate):,} JPY)")
-    
+        val = st.number_input("Amount", 0.0, 10000000.0, 10000.0)
+        rate = st.radio("Rate", [0.08, 0.10], horizontal=True)
+        st.warning(f"Incl. Tax: {int(val * (1+rate)):,} JPY")
     st.markdown('</div>', unsafe_allow_html=True)

@@ -5,29 +5,26 @@ import urllib.request
 import json
 
 # --- 1. 強制リセット & 状態管理 ---
-if 'v11_pro_update' not in st.session_state:
+if 'v12_pro_fuel_update' not in st.session_state:
     st.session_state.clear()
-    st.session_state.v11_pro_update = True
+    st.session_state.v12_pro_fuel_update = True
     st.session_state.display = ""
     st.session_state.lang = "日本語"
     st.session_state.theme = "Dark"
     st.session_state.rates = {"USD": 156.4}
 
-# --- 2. 10言語定義 ---
+# --- 2. 言語定義 ---
 L_MAP = {
-    "日本語": {"upd": "レート更新", "thm": "表示切替", "clr": "消去", "exe": "計算実行", "si": "接頭語", "sci": "科学", "stat": "値数", "paid": "有料機能", "fuel": "ガソリン", "cur": "通貨レート", "tax": "税金計算", "mean":"平均値", "sum":"合計値", "mode":"最頻値", "med":"中央値", "max":"最大値", "min":"最小値", "dev":"偏差値", "exp":"期待値"},
-    "English": {"upd": "UPDATE", "thm": "THEME", "clr": "CLEAR", "exe": "EXEC", "si": "SI", "sci": "SCI", "stat": "VALUE", "paid": "PREMIUM", "fuel": "FUEL", "cur": "FOREX", "tax": "TAX", "mean":"MEAN", "sum":"SUM", "mode":"MODE", "med":"MEDIAN", "max":"MAX", "min":"MIN", "dev":"T-SCORE", "exp":"EXPECTED"},
-    "中文": {"upd": "更新汇率", "thm": "主题", "clr": "清除", "exe": "计算", "si": "单位", "sci": "科学", "stat": "数值", "paid": "付费功能", "fuel": "汽油", "cur": "汇率", "tax": "税金", "mean":"平均", "sum":"总和", "mode":"众数", "med":"中位数", "max":"最大", "min":"最小", "dev":"偏差值", "exp":"期望值"},
-    "한국어": {"upd": "환율갱신", "thm": "테마", "clr": "삭제", "exe": "계산", "si": "접두어", "sci": "과학", "stat": "수치", "paid": "유료기능", "fuel": "가솔린", "cur": "환율", "tax": "세금", "mean":"평균", "sum":"합계", "mode":"최빈값", "med":"중앙값", "max":"최대", "min":"최소", "dev":"편차값", "exp":"기대값"}
+    "日本語": {"upd": "レート更新", "thm": "表示切替", "clr": "消去", "exe": "計算実行", "si": "接頭語", "sci": "科学", "stat": "値数", "paid": "有料機能", "fuel": "燃料・油種", "cur": "通貨レート", "tax": "税金計算", "mean":"平均値", "sum":"合計値", "mode":"最頻値", "med":"中央値", "max":"最大値", "min":"最小値", "dev":"偏差値", "exp":"期待値"},
+    "English": {"upd": "UPDATE", "thm": "THEME", "clr": "CLEAR", "exe": "EXEC", "si": "SI", "sci": "SCI", "stat": "VALUE", "paid": "PREMIUM", "fuel": "FUEL/OIL", "cur": "FOREX", "tax": "TAX", "mean":"MEAN", "sum":"SUM", "mode":"MODE", "med":"MEDIAN", "max":"MAX", "min":"MIN", "dev":"T-SCORE", "exp":"EXPECTED"}
 }
-# 他言語は省略可能ですが一貫性のために維持
 
 SI_CONV = {
     'Q': '*1e30', 'R': '*1e27', 'Y': '*1e24', 'Z': '*1e21', 'E': '*1e18', 'P': '*1e15', 'T': '*1e12', 'G': '*1e9', 'M': '*1e6', 'k': '*1e3',
     'm': '*1e-3', 'μ': '*1e-6', 'n': '*1e-9', 'p': '*1e-12', 'f': '*1e-15', 'a': '*1e-18', 'z': '*1e-21', 'y': '*1e-24', 'r': '*1e-27', 'q': '*1e-30'
 }
 
-# --- 3. デザイン設定 ---
+# --- 3. CSSデザイン ---
 is_dark = st.session_state.theme == "Dark"
 bg_color = "#000000" if is_dark else "#FFFFFF"
 text_color = "#FFFFFF" if is_dark else "#000000"
@@ -55,18 +52,7 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. 統計ロジック ---
-def calc_t_score(data_str):
-    try:
-        data = eval(f"[{data_str.strip()}]")
-        if len(data) < 2: return "Need 2+ values"
-        avg = statistics.mean(data)
-        sd = statistics.stdev(data)
-        if sd == 0: return "50.0"
-        return [round((x - avg) / sd * 10 + 50, 2) for x in data]
-    except: return "Error"
-
-# --- 5. トップナビ ---
+# --- 4. トップナビ ---
 L = L_MAP.get(st.session_state.lang, L_MAP["English"])
 c1, c2, c3 = st.columns([1, 1, 1])
 with c1:
@@ -78,16 +64,16 @@ with c2:
         try:
             with urllib.request.urlopen("https://open.er-api.com/v6/latest/USD") as r:
                 st.session_state.rates["USD"] = json.loads(r.read())["rates"]["JPY"]
-            st.toast("Success")
+            st.toast("Updated")
         except: st.error("Error")
 with c3:
     if st.button(L["thm"]):
         st.session_state.theme = "Light" if is_dark else "Dark"; st.rerun()
 
-# --- 6. ディスプレイ ---
+# --- 5. ディスプレイ ---
 st.markdown(f'<div class="disp">{st.session_state.display if st.session_state.display else "0"}</div>', unsafe_allow_html=True)
 
-# --- 7. キーパッド (πを00に変更) ---
+# --- 6. キーパッド ---
 rows = [["7","8","9","÷"],["4","5","6","×"],["1","2","3","−"],["0",".","00","+"]]
 for row in rows:
     cols = st.columns(4)
@@ -102,19 +88,14 @@ if ex.button(L["exe"]):
         expr = st.session_state.display.replace("×", "*").replace("÷", "/").replace("−", "-")
         expr = expr.replace("e", str(math.e)).replace("i", "1j").replace("π", str(math.pi))
         for k, v in SI_CONV.items(): expr = expr.replace(k, v)
-        # 偏差値ボタンが押された時の特殊処理
-        if "T-SCORE" in expr:
-            data_part = expr.split("[")[-1].split("]")[0]
-            st.session_state.display = str(calc_t_score(data_part))
-        else:
-            res = eval(expr, {"math": math, "statistics": statistics})
-            st.session_state.display = format(res, '.10g') if not isinstance(res, complex) else str(res)
+        res = eval(expr, {"math": math, "statistics": statistics})
+        st.session_state.display = format(res, '.10g') if not isinstance(res, complex) else str(res)
     except: st.session_state.display = "Error"
     st.rerun()
 
 st.divider()
 
-# --- 8. タブ機能 ---
+# --- 7. タブ機能 ---
 t_si, t_sci, t_stat, t_paid = st.tabs([L["si"], L["sci"], L["stat"], L["paid"]])
 
 with t_si:
@@ -138,16 +119,14 @@ with t_sci:
 
 with t_stat:
     r1 = st.columns(3)
-    if r1[0].button(L["mean"]): st.session_state.display += "statistics.mean(["; st.rerun()
-    if r1[1].button(L["med"]): st.session_state.display += "statistics.median(["; st.rerun()
-    if r1[2].button(L["mode"]): st.session_state.display += "statistics.mode(["; st.rerun()
+    for i, k in enumerate(["mean", "med", "mode"]):
+        if r1[i].button(L[k]): st.session_state.display += f"statistics.{k}(["; st.rerun()
     r2 = st.columns(3)
-    if r2[0].button(L["sum"]): st.session_state.display += "sum(["; st.rerun()
-    if r2[1].button(L["max"]): st.session_state.display += "max(["; st.rerun()
-    if r2[2].button(L["min"]): st.session_state.display += "min(["; st.rerun()
+    for i, k in enumerate(["sum", "max", "min"]):
+        if r2[i].button(L[k]): st.session_state.display += f"{k}(["; st.rerun()
     r3 = st.columns(2)
-    if r3[0].button(L["dev"]): st.session_state.display = "T-SCORE(["; st.rerun()
-    if r3[1].button(L["exp"]): st.session_state.display += "sum([x*p for x,p in zip([値],[確率])])"; st.rerun()
+    if r3[0].button(L["dev"]): st.session_state.display += "Dev_Score(["; st.rerun()
+    if r3[1].button(L["exp"]): st.session_state.display += "Expect(["; st.rerun()
     r4 = st.columns(2)
     if r4[0].button(",", key="btn_comma"): st.session_state.display += ","; st.rerun()
     if r4[1].button("CLOSE ])"): st.session_state.display += "])"; st.rerun()
@@ -160,27 +139,38 @@ with t_paid:
 
     if mode == L["fuel"]:
         st.subheader(f"⛽ {L['fuel']}")
-        fuel_type = st.selectbox("油種を選択", ["レギュラー", "ハイオク", "軽油"])
-        base_prices = {"レギュラー": 170, "ハイオク": 181, "軽油": 149}
         
-        region = st.selectbox("地方を選択", ["東京", "神奈川", "埼玉", "千葉", "大阪", "北海道", "東北", "中部", "近畿", "中国四国", "九州"])
-        reg_diff = {"東京": 5, "神奈川": 2, "埼玉": 0, "千葉": -2, "大阪": 4, "北海道": 8, "東北": 3, "中部": 1, "近畿": 4, "中国四国": 6, "九州": 10}
+        # 油種選択
+        oil_types = {
+            "レギュラー": 170, "ハイオク": 181, "軽油": 149, 
+            "灯油": 115, "重油": 95, "ナフサ": 75, "アスファルト": 85, "潤滑油": 130
+        }
+        fuel_type = st.selectbox("油種を選択", list(oil_types.keys()))
         
-        final_unit_price = base_prices[fuel_type] + reg_diff[region]
-        st.write(f"現在の予測単価: {final_unit_price} JPY/L ({fuel_type}@{region})")
+        # 地方選択
+        regions = {
+            "全国平均": 0, "東京": 5, "神奈川": 2, "埼玉": 0, "千葉": -2, "大阪": 4, 
+            "北海道": 8, "東北": 3, "中部": 1, "近畿": 4, "中国四国": 6, "九州": 10
+        }
+        region = st.selectbox("地方を選択", list(regions.keys()))
         
-        lit = st.number_input("給油量 (L)", 1.0, 500.0, 50.0)
+        final_unit_price = oil_types[fuel_type] + regions[region]
+        st.info(f"単価: {final_unit_price} JPY/L ({fuel_type} @ {region})")
+        
+        # 給油量 (1Lずつの増減)
+        lit = st.number_input("給油量 (L)", min_value=1.0, max_value=1000.0, value=50.0, step=1.0)
+        
         st.markdown(f"## 合計: **{int(lit * final_unit_price):,} JPY**")
 
     elif mode == L["cur"]:
         st.subheader(f"💱 {L['cur']}")
         u = st.session_state.rates["USD"]
-        amt = st.number_input("USD", 0.0, 1000000.0, 100.0)
+        amt = st.number_input("USD", 0.0, 1000000.0, 100.0, step=10.0)
         st.markdown(f"## **{amt * u:,.0f} JPY**")
         
     elif mode == L["tax"]:
         st.subheader(f"🧾 {L['tax']}")
-        val = st.number_input("Amount", 0.0, 10000000.0, 10000.0)
+        val = st.number_input("Amount", 0.0, 10000000.0, 10000.0, step=100.0)
         rate = st.radio("Rate", [0.08, 0.10], horizontal=True)
         st.markdown(f"## **{int(val * (1+rate)):,} JPY**")
     st.markdown('</div>', unsafe_allow_html=True)

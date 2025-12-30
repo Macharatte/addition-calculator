@@ -5,9 +5,9 @@ import urllib.request
 import json
 
 # --- 1. 強制リセット & 状態管理 ---
-if 'v9_stat_expansion' not in st.session_state:
+if 'v10_final_plus' not in st.session_state:
     st.session_state.clear()
-    st.session_state.v9_stat_expansion = True
+    st.session_state.v10_final_plus = True
     st.session_state.display = ""
     st.session_state.lang = "日本語"
     st.session_state.theme = "Dark"
@@ -44,12 +44,12 @@ st.markdown(f"""
         background-color: {bg_color} !important; color: {text_color} !important;
         padding: 25px; border: 4px solid {text_color} !important;
         border-radius: 12px; font-size: 48px; text-align: right;
-        font-family: monospace; margin-bottom: 20px;
+        font-family: monospace; margin-bottom: 20px; min-height: 100px; overflow-x: auto;
     }}
     div.stButton > button {{
         width: 100% !important; border: 2px solid {text_color} !important;
         background-color: {bg_color} !important; color: {text_color} !important;
-        font-weight: bold !important; transition: 0.2s;
+        font-weight: bold !important; transition: 0.1s;
     }}
     div.stButton > button:hover {{
         background-color: {text_color} !important; color: {bg_color} !important;
@@ -102,8 +102,11 @@ if cl.button(L["clr"]): st.session_state.display = ""; st.rerun()
 if ex.button(L["exe"]):
     try:
         expr = st.session_state.display.replace("×", "*").replace("÷", "/").replace("−", "-")
+        # 科学定数と虚数単位の処理
+        expr = expr.replace("e", str(math.e)).replace("i", "1j")
         for k, v in SI_CONV.items(): expr = expr.replace(k, v)
-        st.session_state.display = format(eval(expr, {"math": math, "statistics": statistics}), '.10g')
+        res = eval(expr, {"math": math, "statistics": statistics})
+        st.session_state.display = format(res, '.10g') if not isinstance(res, complex) else str(res)
     except: st.session_state.display = "Error"
     st.rerun()
 
@@ -123,12 +126,18 @@ with t_si:
 
 with t_sci:
     sc = st.columns(4)
-    sf = {"sin":"math.sin(", "cos":"math.cos(", "tan":"math.tan(", "√":"math.sqrt(", "log":"math.log10(", "(":"(", ")":")"}
-    for i, (k, v) in enumerate(sf.items()):
-        if sc[i%4].button(k, key=f"sc_{k}"): st.session_state.display += v; st.rerun()
+    # i と e を追加
+    sf = {"sin":"math.sin(", "cos":"math.cos(", "tan":"math.tan(", "√":"math.sqrt(", "log":"math.log10(", "(":"(", ")":")", "i":"i", "e":"e"}
+    sf_list = list(sf.items())
+    for i in range(0, len(sf_list), 4):
+        cols = st.columns(4)
+        for j in range(4):
+            if i+j < len(sf_list):
+                k, v = sf_list[i+j]
+                if cols[j].button(k, key=f"sc_{k}"): st.session_state.display += v; st.rerun()
 
 with t_stat:
-    # --- 値数タブの強化 ---
+    # --- 値数タブ: カンマを追加 ---
     r1 = st.columns(3)
     if r1[0].button(L["mean"]): st.session_state.display += "statistics.mean(["; st.rerun()
     if r1[1].button(L["med"]): st.session_state.display += "statistics.median(["; st.rerun()
@@ -139,7 +148,9 @@ with t_stat:
     if r2[1].button(L["max"]): st.session_state.display += "max(["; st.rerun()
     if r2[2].button(L["min"]): st.session_state.display += "min(["; st.rerun()
     
-    if st.button("CLOSE ])"): st.session_state.display += "])"; st.rerun()
+    r3 = st.columns(2)
+    if r3[0].button(",", key="btn_comma"): st.session_state.display += ","; st.rerun()
+    if r3[1].button("CLOSE ])"): st.session_state.display += "])"; st.rerun()
 
 with t_paid:
     st.markdown(f'<div class="paid-box">', unsafe_allow_html=True)

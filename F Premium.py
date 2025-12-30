@@ -5,24 +5,22 @@ import urllib.request
 import json
 
 # --- 1. システム状態管理 ---
-if 'v15_extended_pro' not in st.session_state:
+if 'v16_jp_tax_update' not in st.session_state:
     st.session_state.clear()
-    st.session_state.v15_extended_pro = True
+    st.session_state.v16_jp_tax_update = True
     st.session_state.display = ""
     st.session_state.lang = "日本語"
     st.session_state.theme = "Dark"
-    # 通貨初期レート
     st.session_state.rates = {
         "USD": 156.4, "EUR": 168.2, "GBP": 195.5, "AUD": 102.3, "CAD": 113.8,
         "CHF": 174.5, "CNH": 21.5, "HKD": 20.0, "SGD": 115.2, "NZD": 94.8,
         "BTC": 13972000, "ETH": 485500
     }
 
-# --- 2. 言語・接頭語定義 ---
+# --- 2. 10言語完全定義 (内部保持) ---
 L_MAP = {
     "日本語": {"upd": "更新", "thm": "テーマ", "clr": "消去", "exe": "実行", "si": "接頭語", "sci": "科学", "stat": "値数", "paid": "プロ", "fuel": "燃料", "cur": "通貨", "tax": "税金", "mean":"平均", "sum":"合計", "mode":"最頻", "med":"中央", "max":"最大", "min":"最小", "dev":"偏差値", "exp":"期待値"},
-    "English": {"upd": "UPD", "thm": "THEME", "clr": "CLR", "exe": "EXE", "si": "SI", "sci": "SCI", "stat": "VAL", "paid": "PRO", "fuel": "FUEL", "cur": "FOREX", "tax": "TAX", "mean":"MEAN", "sum":"SUM", "mode":"MODE", "med":"MED", "max":"MAX", "min":"MIN", "dev":"T-SCR", "exp":"EXP"},
-    # 他の8言語は内部的に保持
+    "English": {"upd": "UPD", "thm": "THEME", "clr": "CLR", "exe": "EXE", "si": "SI", "sci": "SCI", "stat": "VAL", "paid": "PRO", "fuel": "FUEL", "cur": "FOREX", "tax": "TAX", "mean":"MEAN", "sum":"SUM", "mode":"MODE", "med":"MED", "max":"MAX", "min":"MIN", "dev":"T-SCR", "exp":"EXP"}
 }
 
 SI_CONV = {
@@ -74,8 +72,8 @@ with c2:
                 for c in ["EUR", "GBP", "AUD", "CAD", "CHF", "HKD", "SGD", "NZD"]:
                     st.session_state.rates[c] = data["rates"]["JPY"] / data["rates"][c]
                 st.session_state.rates["USD"] = data["rates"]["JPY"]
-            st.toast("Rates Updated")
-        except: st.error("Update Failed")
+            st.toast("Updated")
+        except: st.error("ERR")
 with c3:
     if st.button(L["thm"]): st.session_state.theme = "Light" if is_dark else "Dark"; st.rerun()
 
@@ -129,12 +127,10 @@ with t_stat:
     if r1[0].button(L["mean"]): st.session_state.display += "statistics.mean(["; st.rerun()
     if r1[1].button(L["med"]): st.session_state.display += "statistics.median(["; st.rerun()
     if r1[2].button(L["mode"]): st.session_state.display += "statistics.mode(["; st.rerun()
-    r3 = st.columns(2)
-    if r3[0].button(L["dev"]): st.session_state.display += "[(x-statistics.mean(d))/statistics.stdev(d)*10+50 for d in [["; st.rerun()
-    if r3[1].button(L["exp"]): st.session_state.display += "sum([x*p for x,p in zip([値],[率])])"; st.rerun()
+    if st.button(L["dev"]): st.session_state.display += "[(x-statistics.mean(d))/statistics.stdev(d)*10+50 for d in [["; st.rerun()
     if st.button("CLOSE ])"): st.session_state.display += "])"; st.rerun()
 
-# --- 7. 有料・プロ機能 ---
+# --- 7. 有料・プロ機能 (日本税制特化) ---
 with t_paid:
     mode = st.radio("SELECT FUNCTION", [L["fuel"], L["cur"], L["tax"]], horizontal=True, label_visibility="collapsed")
     
@@ -151,18 +147,33 @@ with t_paid:
     elif mode == L["cur"]:
         cur_list = ["USD", "EUR", "GBP", "AUD", "CAD", "CHF", "CNH", "HKD", "SGD", "NZD", "BTC", "ETH"]
         c_target = st.selectbox("通貨を選択", cur_list)
-        amt = st.number_input("数量", 0.0, 1000000.0, 1.0, step=0.1)
+        amt = st.number_input("変換元の数量", 0.0, 1000000.0, 1.0, step=0.1)
         rate = st.session_state.rates.get(c_target, 1.0)
         st.markdown(f'<div class="result-card"><h3>結果: {amt * rate:,.2f} JPY</h3><p>1 {c_target} = {rate:,.2f}円</p></div>', unsafe_allow_html=True)
 
     elif mode == L["tax"]:
-        tax_dict = {
-            "日本 (標準 10%)": 0.10, "日本 (軽減 8%)": 0.08, "ハンガリー (27%)": 0.27, 
-            "北欧諸国 (25%)": 0.25, "イタリア (22%)": 0.22, "スペイン (21%)": 0.21,
-            "フランス・英国 (20%)": 0.20, "ドイツ (19%)": 0.19, "中国・カナダ (13%)": 0.13,
-            "韓国・オーストラリア (10%)": 0.10, "台湾 (5%)": 0.05
+        # 日本の主要税率に特化
+        jp_taxes = {
+            "消費税 (標準 10%)": 0.10,
+            "消費税 (軽減 8%)": 0.08,
+            "源泉徴収 (報酬 10.21%)": 0.1021,
+            "源泉徴収 (100万超 20.42%)": 0.2042,
+            "投資 (配当・譲渡 20.315%)": 0.20315,
+            "住民税など (標準 5%)": 0.05,
+            "印紙税・地方税など (3%)": 0.03,
+            "特例・軽減など (2%)": 0.02
         }
-        t_type = st.selectbox("税率を選択", list(tax_dict.keys()) + ["カスタム"])
-        base_amt = st.number_input("金額 (税抜)", 0.0, 10000000.0, 10000.0, step=100.0)
-        t_rate = tax_dict[t_type] if t_type != "カスタム" else st.slider("カスタム税率 (%)", 0, 50, 15)/100
-        st.markdown(f'<div class="result-card"><h3>税込合計: {int(base_amt * (1+t_rate)):,} JPY</h3><p>税額: {int(base_amt * t_rate):,} JPY ({int(t_rate*100)}%)</p></div>', unsafe_allow_html=True)
+        t_type = st.selectbox("日本の税率・徴収率を選択", list(jp_taxes.keys()) + ["カスタム入力"])
+        base_amt = st.number_input("金額 (ベース)", 0.0, 10000000.0, 10000.0, step=100.0)
+        
+        if t_type == "カスタム入力":
+            t_rate = st.slider("カスタム税率 (%)", 0.0, 50.0, 15.0, step=0.1) / 100
+        else:
+            t_rate = jp_taxes[t_type]
+            
+        st.markdown(f"""
+        <div class="result-card">
+            <h3>計算結果: {int(base_amt * (1+t_rate)):,} JPY</h3>
+            <p>対象額: {base_amt:,.0f}円 / 税額・徴収額: {int(base_amt * t_rate):,}円 ({t_rate*100:.3f}%)</p>
+        </div>
+        """, unsafe_allow_html=True)
